@@ -1,0 +1,30 @@
+const { Schema } = require('mongoose');
+
+class User {
+    static name = 'User';
+    static collection = 'users';
+    static IsStandardModel = true;
+
+    static getSchema() {
+        return {
+            username: { type: String, unique: true, required: true, trim: true, lowercase: true },
+            email: { type: String, unique: true, required: true, trim: true, lowercase: true },
+            password: { type: String, required: true }, // Phải được băm (hashed)
+            fullName: { type: String, required: true },
+            role: {
+                type: String,
+                required: true,
+                enum: [
+                    "SUPPLIER", // Nhà cung cấp
+                    "STAFF",    // Nhân viên C/O
+                    "MOIT"      // Viewer (Bộ Công Thương)
+                ]
+            },
+            companyId: { type: Schema.Types.ObjectId, ref: 'Company' },
+            isDisabled: { type: Boolean, default: false },
+            createdAt: { type: Date, default: Date.now }
+        };
+    }
+}
+
+module.exports = User;
