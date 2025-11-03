@@ -178,6 +178,52 @@ class Helpers {
             }
         };
     }
+
+    // Pagination helpers
+    buildPagination(query = {}, defaults = {}) {
+        const page = Math.max(parseInt(query.page) || defaults.page || 1, 1);
+        const limitRaw = parseInt(query.limit) || defaults.limit || 20;
+        const maxLimit = defaults.maxLimit || 100;
+        const limit = Math.min(Math.max(limitRaw, 1), maxLimit);
+        const skip = (page - 1) * limit;
+
+        // sort: `-createdAt` or `email` etc.
+        const sortParam = (query.sort || defaults.sort || '-createdAt').toString();
+        const sort = {};
+        const fields = sortParam.split(',').map(s => s.trim()).filter(Boolean);
+        for (const f of fields) {
+            if (!f) continue;
+            if (f.startsWith('-')) sort[f.substring(1)] = -1;
+            else sort[f] = 1;
+        }
+
+        return { page, limit, skip, sort };
+    }
+
+    buildPaginationMeta(total, page, limit) {
+        const pages = Math.max(Math.ceil((total || 0) / (limit || 1)), 1);
+        return { page, limit, total, pages, hasNext: page < pages, hasPrev: page > 1 };
+        }
+
+    // Date range helper: inclusive day range
+    buildDateRange(fromDate, toDate) {
+        const range = {};
+        if (fromDate) {
+            const d = new Date(fromDate);
+            if (!isNaN(d.getTime())) {
+                d.setHours(0, 0, 0, 0);
+                range.$gte = d;
+            }
+        }
+        if (toDate) {
+            const d = new Date(toDate);
+            if (!isNaN(d.getTime())) {
+                d.setHours(23, 59, 59, 999);
+                range.$lte = d;
+            }
+        }
+        return Object.keys(range).length ? range : null;
+    }
 }
 
 module.exports = new Helpers(); 

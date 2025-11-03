@@ -11,6 +11,9 @@ class User {
             email: { type: String, unique: true, required: true, trim: true, lowercase: true },
             password: { type: String, required: true }, // Phải được băm (hashed)
             fullName: { type: String, required: true },
+            phone: { type: String, default: '' },
+            avatarUrl: { type: String, default: '' },
+            address: { type: String, default: '' },
             role: {
                 type: String,
                 required: true,
@@ -22,7 +25,8 @@ class User {
             },
             companyId: { type: Schema.Types.ObjectId, ref: 'Company' },
             isDisabled: { type: Boolean, default: false },
-            createdAt: { type: Date, default: Date.now }
+            createdAt: { type: Date, default: Date.now },
+            updatedAt: { type: Date, default: Date.now }
         };
     }
 }

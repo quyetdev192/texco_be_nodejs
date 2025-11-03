@@ -14,8 +14,48 @@ const login = asyncHandler(async (req, res) => {
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Đăng nhập thành công', data: result });
 });
 
+const updateProfile = asyncHandler(async (req, res) => {
+    const userId = req.userId;
+    const { fullName, phone, avatarUrl, address, email } = req.body || {};
+    const result = await userHandle.updateProfile(userId, { fullName, phone, avatarUrl, address, email });
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Cập nhật thông tin thành công', data: result });
+});
+
+// Admin (STAFF) user management
+const listUsers = asyncHandler(async (req, res) => {
+    const result = await userHandle.listUsers(req.query || {});
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Thành công', data: result });
+});
+
+const getUser = asyncHandler(async (req, res) => {
+    const result = await userHandle.getUserById(req.params.id);
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Thành công', data: result });
+});
+
+const createUser = asyncHandler(async (req, res) => {
+    const { username, email, password, fullName, role, companyId } = req.body || {};
+    const user = await userHandle.createUser({ username, email, password, fullName, role, companyId });
+    return res.status(constants.HTTP_STATUS.CREATED).json({ success: true, errorCode: 0, message: 'Thành công', data: user });
+});
+
+const updateUser = asyncHandler(async (req, res) => {
+    const result = await userHandle.updateUser(req.params.id, req.body || {});
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Cập nhật thành công', data: result });
+});
+
+const deleteUser = asyncHandler(async (req, res) => {
+    const result = await userHandle.deleteUser(req.params.id);
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Xoá thành công', data: result });
+});
+
 module.exports = {
     create,
-    login
+    login,
+    updateProfile,
+    listUsers,
+    getUser,
+    createUser,
+    updateUser,
+    deleteUser
 };
 

@@ -111,72 +111,318 @@ async function ensureAdminSeed() {
     return { seeded: true, username: adminUsername, email: adminEmail };
 }
 
+async function login(payload) {
+    const { username, password } = payload || {};
+
+    if (!username || typeof username !== 'string') {
+        const err = new Error('Tên đăng nhập không hợp lệ');
+        err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+        err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+        throw err;
+    }
+
+    if (!password || typeof password !== 'string') {
+        const err = new Error('Mật khẩu không hợp lệ');
+        err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+        err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+        throw err;
+    }
+
+    const user = await User.findOne({ username: username.toLowerCase() }).lean();
+    if (!user) {
+        const err = new Error('Tài khoản hoặc mật khẩu không đúng');
+        err.status = constants.HTTP_STATUS.UNAUTHORIZED;
+        err.code = constants.ERROR_CODES.AUTH_INVALID_CREDENTIALS;
+        throw err;
+    }
+
+    if (user.isDisabled) {
+        const err = new Error('Tài khoản đã bị vô hiệu hóa');
+        err.status = constants.HTTP_STATUS.FORBIDDEN;
+        err.code = constants.ERROR_CODES.AUTH_ACCOUNT_DISABLED;
+        throw err;
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+        const err = new Error('Tài khoản hoặc mật khẩu không đúng');
+        err.status = constants.HTTP_STATUS.UNAUTHORIZED;
+        err.code = constants.ERROR_CODES.AUTH_INVALID_CREDENTIALS;
+        throw err;
+    }
+
+    const jwt = require('jsonwebtoken');
+    const jwtCfg = require('../../core/config/security.config').getJwtConfig();
+
+    const payloadToken = {
+        userId: user._id?.toString(),
+        username: user.username,
+        email: user.email,
+        roles: [user.role]
+    };
+
+    const accessToken = jwt.sign(payloadToken, jwtCfg.secret, {
+        expiresIn: jwtCfg.expiresIn,
+        issuer: jwtCfg.issuer,
+        audience: jwtCfg.audience
+    });
+
+    const refreshToken = jwt.sign(payloadToken, jwtCfg.secret, {
+        expiresIn: jwtCfg.refreshExpiresIn,
+        issuer: jwtCfg.issuer,
+        audience: jwtCfg.audience
+    });
+
+    const safeUser = {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        companyId: user.companyId,
+        phone: user.phone || '',
+        avatarUrl: user.avatarUrl || '',
+        address: user.address || '',
+        isDisabled: !!user.isDisabled,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+    };
+
+    return { user: safeUser, tokens: { accessToken, refreshToken } };
+}
+
+async function updateProfile(userId, payload) {
+    const { fullName, phone, avatarUrl, address, email } = payload || {};
+
+    if (!userId) {
+        const err = new Error('Thiếu thông tin người dùng');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        err.code = constants.ERROR_CODES.VALIDATION_REQUIRED_FIELD;
+        throw err;
+    }
+
+    const updates = {};
+    if (typeof fullName === 'string' && fullName.trim()) updates.fullName = fullName.trim();
+    if (typeof phone === 'string') updates.phone = phone.trim();
+    if (typeof avatarUrl === 'string') updates.avatarUrl = avatarUrl.trim();
+    if (typeof address === 'string') updates.address = address.trim();
+    if (typeof email === 'string' && email.trim()) {
+        const newEmail = email.trim().toLowerCase();
+        if (!helpers.isValidEmail(newEmail)) {
+            const err = new Error('Email không hợp lệ');
+            err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+            err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+            throw err;
+        }
+
+        const exists = await User.findOne({ email: newEmail, _id: { $ne: userId } }).lean();
+        if (exists) {
+            const err = new Error('Email đã tồn tại');
+            err.status = constants.HTTP_STATUS.CONFLICT;
+            err.code = constants.ERROR_CODES.DB_DUPLICATE_KEY;
+            throw err;
+        }
+
+        updates.email = newEmail;
+    }
+    updates.updatedAt = new Date();
+
+    const updated = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, lean: true });
+    if (!updated) {
+        const err = new Error('Không tìm thấy người dùng');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        err.code = constants.ERROR_CODES.DB_NOT_FOUND;
+        throw err;
+    }
+
+    const { password: _pw, ...safeUser } = updated;
+    return safeUser;
+}
+async function  listUsers(query) {
+    const { page, limit, skip, sort } = helpers.buildPagination(query, { sort: '-createdAt' });
+    const keyword = (query.search || '').trim();
+
+    const conditions = {};
+    if (keyword) {
+        conditions.$or = [
+            { username: { $regex: keyword, $options: 'i' } },
+            { email: { $regex: keyword, $options: 'i' } },
+            { fullName: { $regex: keyword, $options: 'i' } },
+            { phone: { $regex: keyword, $options: 'i' } }
+        ];
+    }
+
+    // Filters: role, companyId, isDisabled, createdAt range
+    if (query.role) conditions.role = query.role;
+    if (query.companyId && mongoose.isValidObjectId(query.companyId)) conditions.companyId = query.companyId;
+    if (typeof query.isDisabled !== 'undefined') {
+        const val = String(query.isDisabled).toLowerCase();
+        conditions.isDisabled = (val === 'true' || val === '1');
+    }
+    {
+        const range = helpers.buildDateRange(query.fromDate, query.toDate);
+        if (range) conditions.createdAt = range;
+    }
+
+    const [items, total] = await Promise.all([
+        User.find(conditions).sort(sort).skip(skip).limit(limit).lean(),
+        User.countDocuments(conditions)
+    ]);
+
+    const safeItems = items.map(u => ({
+        _id: u._id,
+        username: u.username,
+        email: u.email,
+        fullName: u.fullName,
+        role: u.role,
+        companyId: u.companyId,
+        phone: u.phone || '',
+        avatarUrl: u.avatarUrl || '',
+        address: u.address || '',
+        isDisabled: !!u.isDisabled,
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt
+    }));
+
+    return {
+        items: safeItems,
+        pagination: helpers.buildPaginationMeta(total, page, limit)
+    };
+}
+async function getUserById(id) {
+    if (!id || !mongoose.isValidObjectId(id)) {
+        const err = new Error('ID không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+        throw err;
+    }
+    const u = await User.findById(id).lean();
+    if (!u) {
+        const err = new Error('Không tìm thấy người dùng');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        err.code = constants.ERROR_CODES.DB_NOT_FOUND;
+        throw err;
+    }
+    return {
+        _id: u._id,
+        username: u.username,
+        email: u.email,
+        fullName: u.fullName,
+        role: u.role,
+        companyId: u.companyId,
+        phone: u.phone || '',
+        avatarUrl: u.avatarUrl || '',
+        address: u.address || '',
+        isDisabled: !!u.isDisabled,
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt
+    };
+}
+async function  updateUser(id, payload) {
+    if (!id || !mongoose.isValidObjectId(id)) {
+        const err = new Error('ID không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+        throw err;
+    }
+
+    const { fullName, email, phone, avatarUrl, address, role, companyId, isDisabled } = payload || {};
+
+    const updates = {};
+    if (typeof fullName === 'string' && fullName.trim()) updates.fullName = fullName.trim();
+    if (typeof phone === 'string') updates.phone = phone.trim();
+    if (typeof avatarUrl === 'string') updates.avatarUrl = avatarUrl.trim();
+    if (typeof address === 'string') updates.address = address.trim();
+    if (typeof isDisabled === 'boolean') updates.isDisabled = isDisabled;
+
+    if (email) {
+        const newEmail = String(email).trim().toLowerCase();
+        if (!helpers.isValidEmail(newEmail)) {
+            const err = new Error('Email không hợp lệ');
+            err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+            err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+            throw err;
+        }
+        const exists = await User.findOne({ email: newEmail, _id: { $ne: id } }).lean();
+        if (exists) {
+            const err = new Error('Email đã tồn tại');
+            err.status = constants.HTTP_STATUS.CONFLICT;
+            err.code = constants.ERROR_CODES.DB_DUPLICATE_KEY;
+            throw err;
+        }
+        updates.email = newEmail;
+    }
+
+    if (role) {
+        const allowedRoles = UserModelClass.getSchema().role.enum;
+        if (!allowedRoles.includes(role)) {
+            const err = new Error(`Vai trò không hợp lệ. Cho phép: ${allowedRoles.join(', ')}`);
+            err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+            err.code = constants.ERROR_CODES.VALIDATION_INVALID_TYPE;
+            throw err;
+        }
+        updates.role = role;
+    }
+
+    if (companyId) {
+        if (!mongoose.isValidObjectId(companyId)) {
+            const err = new Error('companyId không hợp lệ');
+            err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+            err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+            throw err;
+        }
+        updates.companyId = companyId;
+    }
+
+    updates.updatedAt = new Date();
+
+    const updated = await User.findByIdAndUpdate(id, { $set: updates }, { new: true, lean: true });
+    if (!updated) {
+        const err = new Error('Không tìm thấy người dùng');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        err.code = constants.ERROR_CODES.DB_NOT_FOUND;
+        throw err;
+    }
+
+    return {
+        _id: updated._id,
+        username: updated.username,
+        email: updated.email,
+        fullName: updated.fullName,
+        role: updated.role,
+        companyId: updated.companyId,
+        phone: updated.phone || '',
+        avatarUrl: updated.avatarUrl || '',
+        address: updated.address || '',
+        isDisabled: !!updated.isDisabled,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt
+    };
+}
+async function  deleteUser(id) {
+    if (!id || !mongoose.isValidObjectId(id)) {
+        const err = new Error('ID không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
+        throw err;
+    }
+    const deleted = await User.findByIdAndDelete(id).lean();
+    if (!deleted) {
+        const err = new Error('Không tìm thấy người dùng');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        err.code = constants.ERROR_CODES.DB_NOT_FOUND;
+        throw err;
+    }
+    return { deleted: true };
+}
+
 module.exports = {
     createUser,
     ensureAdminSeed,
-    login: async function(payload) {
-        const { username, password } = payload || {};
-
-        if (!username || typeof username !== 'string') {
-            const err = new Error('Tên đăng nhập không hợp lệ');
-            err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
-            err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
-            throw err;
-        }
-
-        if (!password || typeof password !== 'string') {
-            const err = new Error('Mật khẩu không hợp lệ');
-            err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
-            err.code = constants.ERROR_CODES.VALIDATION_INVALID_FORMAT;
-            throw err;
-        }
-
-        const user = await User.findOne({ username: username.toLowerCase() }).lean();
-        if (!user) {
-            const err = new Error('Tài khoản hoặc mật khẩu không đúng');
-            err.status = constants.HTTP_STATUS.UNAUTHORIZED;
-            err.code = constants.ERROR_CODES.AUTH_INVALID_CREDENTIALS;
-            throw err;
-        }
-
-        if (user.isDisabled) {
-            const err = new Error('Tài khoản đã bị vô hiệu hóa');
-            err.status = constants.HTTP_STATUS.FORBIDDEN;
-            err.code = constants.ERROR_CODES.AUTH_ACCOUNT_DISABLED;
-            throw err;
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            const err = new Error('Tài khoản hoặc mật khẩu không đúng');
-            err.status = constants.HTTP_STATUS.UNAUTHORIZED;
-            err.code = constants.ERROR_CODES.AUTH_INVALID_CREDENTIALS;
-            throw err;
-        }
-
-        const jwt = require('jsonwebtoken');
-        const jwtCfg = require('../../core/config/security.config').getJwtConfig();
-
-        const payloadToken = {
-            userId: user._id?.toString(),
-            username: user.username,
-            email: user.email,
-            roles: [user.role]
-        };
-
-        const accessToken = jwt.sign(payloadToken, jwtCfg.secret, {
-            expiresIn: jwtCfg.expiresIn,
-            issuer: jwtCfg.issuer,
-            audience: jwtCfg.audience
-        });
-
-        const refreshToken = jwt.sign(payloadToken, jwtCfg.secret, {
-            expiresIn: jwtCfg.refreshExpiresIn,
-            issuer: jwtCfg.issuer,
-            audience: jwtCfg.audience
-        });
-
-        const { password: _pw, ...safeUser } = user;
-        return { user: safeUser, tokens: { accessToken, refreshToken } };
-    }
+    login,
+    updateProfile,
+    listUsers,
+    getUserById,
+    updateUser,
+    deleteUser
 };

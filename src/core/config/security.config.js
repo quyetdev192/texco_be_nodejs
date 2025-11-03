@@ -28,7 +28,15 @@ class SecurityConfig {
             cors: {
                 origin: process.env.CORS_ORIGIN || '*',
                 methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-                allowedHeaders: ['Content-Type', 'Authorization', 'x-timestamp', 'x-signature', 'x-api-key'],
+                allowedHeaders: [
+                    'Content-Type',
+                    'Authorization',
+                    'x-timestamp',
+                    'x-signature',
+                    'x-signature-nonce',
+                    'x-from',
+                    'x-api-key'
+                ],
                 credentials: true,
                 maxAge: 86400 
             },
@@ -106,7 +114,31 @@ class SecurityConfig {
     }
 
     getCorsConfig() {
-        return this.config.cors;
+        const rawOrigin = process.env.CORS_ORIGIN || '*';
+
+        // If wildcard, mirror request origin (works with credentials)
+        if (rawOrigin === '*') {
+            return { ...this.config.cors, origin: true };
+        }
+
+        // Support comma-separated allowlist: "http://a.com,http://b.com"
+        const allowlist = rawOrigin.split(',').map(o => o.trim()).filter(Boolean);
+
+        const isProd = this.isProduction();
+
+        return {
+            ...this.config.cors,
+            origin: (origin, callback) => {
+                // Allow non-browser or same-origin requests (no Origin header)
+                if (!origin) return callback(null, true);
+                // In non-production, allow any localhost/127.0.0.1 origin for DX
+                if (!isProd && (/^https?:\/\/localhost:\d+$/i.test(origin) || /^https?:\/\/127\.0\.0\.1:\d+$/i.test(origin))) {
+                    return callback(null, true);
+                }
+                if (allowlist.includes(origin)) return callback(null, true);
+                return callback(new Error('Not allowed by CORS'));
+            }
+        };
     }
 
     getHelmetConfig() {

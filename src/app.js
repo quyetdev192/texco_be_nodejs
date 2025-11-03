@@ -5,13 +5,13 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const compression = require('compression');
-const { initializeConfigs } = require('./config');
+const { initializeConfigs } = require('./core/config');
 const securityConfig = require('./config/security.config');
 const logger = require('./config/logger.config');
 const { errorHandler, notFoundHandler } = require('./middlewares/error.middleware');
 const { validateTimestamp, verifySignature, addSignatureHeaders } = require('./middlewares/signature.middleware');
 const { requestLogger } = require('./middlewares/requestLog.middleware');
-const apiRoutes = require('../api/routes');
+const apiRoutes = require('./api/routes');
 
 class App {
     constructor() {
@@ -47,10 +47,10 @@ class App {
         this.app.use(helmet(securityConfig.getHelmetConfig()));
         this.app.use(cors(securityConfig.getCorsConfig()));
         this.app.use('/api/', rateLimit(securityConfig.getRateLimitConfig()));
-        this.app.use('/api/',
-            // validateTimestamp, 
-            // verifySignature,
-             addSignatureHeaders);
+        this.app.use('/api/', validateTimestamp, 
+            // verifySignature, 
+             addSignatureHeaders
+            );
         this.app.use('/api/', requestLogger);
     }
 
