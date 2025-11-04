@@ -20,7 +20,8 @@ class User {
                 enum: [
                     "SUPPLIER", // Nhà cung cấp
                     "STAFF",    // Nhân viên C/O
-                    "MOIT"      // Viewer (Bộ Công Thương)
+                    "MOIT",     // Viewer (Bộ Công Thương)
+                    "ADMIN"     // Admin
                 ]
             },
             companyId: { type: Schema.Types.ObjectId, ref: 'Company' },
