@@ -97,6 +97,11 @@ const validateApiKey = (req, res, next) => {
 
 const validateTimestamp = (req, res, next) => {
     try {
+        // Always allow preflight and whitelisted paths
+        if (req.method === 'OPTIONS' || shouldSkipSignature(req.path)) {
+            return next();
+        }
+
         const signatureNonce = req.headers['x-signature-nonce'];
 
         if (!signatureNonce) {
