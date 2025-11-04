@@ -9,7 +9,7 @@ class User {
         return {
             username: { type: String, unique: true, required: true, trim: true, lowercase: true },
             email: { type: String, unique: true, required: true, trim: true, lowercase: true },
-            password: { type: String, required: true }, // Phải được băm (hashed)
+            password: { type: String, required: true },
             fullName: { type: String, required: true },
             phone: { type: String, default: '' },
             avatarUrl: { type: String, default: '' },
