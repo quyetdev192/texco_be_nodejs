@@ -36,8 +36,9 @@ class App {
     }
 
     setupBasicMiddleware() {
-        this.app.use(express.json({ limit: '10mb' }));
-        this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+        const bodyLimit = process.env.BODY_LIMIT || '50mb';
+        this.app.use(express.json({ limit: bodyLimit }));
+        this.app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
         this.app.use(cookieParser());
         this.app.use(compression());
         this.app.set('trust proxy', 1);

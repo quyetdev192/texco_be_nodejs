@@ -19,6 +19,15 @@ class Document {
                 ]
             },
             note: { type: String, default: '' }, // Ghi chú của NCC khi upload
+            // Nội dung base64 đa trang (ưu tiên) và tương thích cũ
+            base64Images: [{
+                content: { type: String }, // Base64 không kèm prefix data:
+                mimeType: { type: String },
+                page: { type: Number }
+            }],
+            // Trường cũ để tương thích ngược (nếu FE chỉ gửi 1 ảnh)
+            base64Content: { type: String },
+            mimeType: { type: String },
             // Liên kết với bộ chứng từ
             bundleId: { type: Schema.Types.ObjectId, ref: 'Bundle', required: true },
             status: {

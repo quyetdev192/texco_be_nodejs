@@ -102,12 +102,30 @@ async function supplierCreate(userId, payload) {
             failed.push({ index: idx, message: 'Thiếu fileName/storagePath/documentType' });
             return;
         }
+        // Chuẩn hóa danh sách ảnh base64 (ưu tiên dạng list object FE gửi)
+        let normalizedImages = [];
+        if (Array.isArray(d.base64Images)) {
+            normalizedImages = d.base64Images
+                .filter(it => it && typeof it.content === 'string' && it.content.trim().length > 0)
+                .map((it, i) => ({ content: it.content, mimeType: it.mimeType || d.mimeType || 'image/png', page: it.page ?? (i + 1) }));
+        } else if (Array.isArray(d.base64ContentPages)) {
+            normalizedImages = d.base64ContentPages
+                .filter(s => typeof s === 'string' && s.trim().length > 0)
+                .map((content, i) => ({ content, mimeType: d.mimeType || 'image/png', page: i + 1 }));
+        } else if (d.base64Content) {
+            normalizedImages = [{ content: d.base64Content, mimeType: d.mimeType || 'image/png', page: 1 }];
+        }
+        const firstImage = normalizedImages[0];
         docsToInsert.push({
             fileName: d.fileName,
             storagePath: d.storagePath,
             documentType: d.documentType,
             bundleId: bundle._id,
             note: d.note || '',
+            base64Images: normalizedImages.length > 0 ? normalizedImages : undefined,
+            // Back-compat: set single fields từ trang đầu
+            base64Content: firstImage ? firstImage.content : undefined,
+            mimeType: firstImage ? firstImage.mimeType : (d.mimeType || undefined),
             companyId: user.companyId,
             uploadedBy: userId,
             status: 'PENDING_REVIEW'
@@ -204,6 +222,31 @@ async function supplierUpdate(userId, bundleId, payload) {
                 if (doc.storagePath !== undefined) updateData.storagePath = doc.storagePath;
                 if (doc.documentType !== undefined) updateData.documentType = doc.documentType;
                 if (doc.note !== undefined) updateData.note = doc.note;
+                // Chuẩn hóa cập nhật ảnh
+                let normalizedImagesUpdate = [];
+                if (Array.isArray(doc.base64Images)) {
+                    normalizedImagesUpdate = doc.base64Images
+                        .filter(it => it && typeof it.content === 'string' && it.content.trim().length > 0)
+                        .map((it, i) => ({ content: it.content, mimeType: it.mimeType || doc.mimeType || 'image/png', page: it.page ?? (i + 1) }));
+                } else if (Array.isArray(doc.base64ContentPages)) {
+                    normalizedImagesUpdate = doc.base64ContentPages
+                        .filter(s => typeof s === 'string' && s.trim().length > 0)
+                        .map((content, i) => ({ content, mimeType: doc.mimeType || 'image/png', page: i + 1 }));
+                } else if (doc.base64Content !== undefined) {
+                    if (doc.base64Content) {
+                        normalizedImagesUpdate = [{ content: doc.base64Content, mimeType: doc.mimeType || 'image/png', page: 1 }];
+                    } else {
+                        normalizedImagesUpdate = [];
+                    }
+                }
+                if (normalizedImagesUpdate.length > 0) {
+                    updateData.base64Images = normalizedImagesUpdate;
+                    updateData.base64Content = normalizedImagesUpdate[0].content;
+                    updateData.mimeType = normalizedImagesUpdate[0].mimeType;
+                } else {
+                    if (doc.mimeType !== undefined) updateData.mimeType = doc.mimeType;
+                    if (doc.base64Content !== undefined) updateData.base64Content = doc.base64Content;
+                }
                 updateData.updatedAt = new Date();
 
                 await Document.findByIdAndUpdate(doc._id, { $set: updateData });
@@ -212,12 +255,28 @@ async function supplierUpdate(userId, bundleId, payload) {
                 if (!doc.fileName || !doc.storagePath || !doc.documentType) {
                     continue; // Skip invalid documents
                 }
+                let normalizedImagesNew = [];
+                if (Array.isArray(doc.base64Images)) {
+                    normalizedImagesNew = doc.base64Images
+                        .filter(it => it && typeof it.content === 'string' && it.content.trim().length > 0)
+                        .map((it, i) => ({ content: it.content, mimeType: it.mimeType || doc.mimeType || 'image/png', page: it.page ?? (i + 1) }));
+                } else if (Array.isArray(doc.base64ContentPages)) {
+                    normalizedImagesNew = doc.base64ContentPages
+                        .filter(s => typeof s === 'string' && s.trim().length > 0)
+                        .map((content, i) => ({ content, mimeType: doc.mimeType || 'image/png', page: i + 1 }));
+                } else if (doc.base64Content) {
+                    normalizedImagesNew = [{ content: doc.base64Content, mimeType: doc.mimeType || 'image/png', page: 1 }];
+                }
+                const firstNew = normalizedImagesNew[0];
                 await Document.create({
                     fileName: doc.fileName,
                     storagePath: doc.storagePath,
                     documentType: doc.documentType,
                     bundleId: bundle._id,
                     note: doc.note || '',
+                    base64Images: normalizedImagesNew.length > 0 ? normalizedImagesNew : undefined,
+                    base64Content: firstNew ? firstNew.content : undefined,
+                    mimeType: firstNew ? firstNew.mimeType : (doc.mimeType || undefined),
                     companyId: user.companyId,
                     uploadedBy: userId,
                     status: 'PENDING_REVIEW'
@@ -528,8 +587,8 @@ async function staffReview(staffUserId, bundleId, payload) {
                     { new: true, lean: true }
                 )
             );
-            // Start OCR for each document
-            setImmediate(() => startOcrJob(doc._id, doc.storagePath).catch(() => {}));
+            // Start OCR từng document với đầy đủ danh sách ảnh
+            setImmediate(() => startOcrJob(doc._id, doc.base64Images && doc.base64Images.length ? doc.base64Images : undefined).catch(() => {}));
         });
         await Promise.all(updatePromises);
     } else {
@@ -541,27 +600,32 @@ async function staffReview(staffUserId, bundleId, payload) {
     // Return bundle detail với đầy đủ thông tin
     return await getBundleDetail(staffUserId, bundleId.toString(), true);
 }
-async function startOcrJob(documentId, fileUrl) {
+async function startOcrJob(documentId, base64ImagesInput) {
     try {
         const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
         if (!GOOGLE_VISION_API_KEY) throw new Error('Missing GOOGLE_VISION_API_KEY');
 
-        const imageResponse = await fetch(fileUrl);
-        if (!imageResponse.ok) {
-            throw new Error(`Failed to fetch image from URL: ${imageResponse.statusText}`);
+        // Lấy danh sách ảnh từ tham số hoặc DB
+        let base64Images = Array.isArray(base64ImagesInput) ? base64ImagesInput : [];
+        if (base64Images.length === 0) {
+            const doc = await Document.findById(documentId).select('base64Images base64Content mimeType').lean();
+            if (doc && Array.isArray(doc.base64Images) && doc.base64Images.length > 0) {
+                base64Images = doc.base64Images.filter(it => it && typeof it.content === 'string' && it.content.trim().length > 0);
+            } else if (doc && doc.base64Content) {
+                base64Images = [{ content: doc.base64Content, mimeType: doc.mimeType || 'image/png', page: 1 }];
+            }
         }
-        
-        const arrayBuffer = await imageResponse.arrayBuffer(); 
-        const imageBuffer = Buffer.from(arrayBuffer); 
-        const base64Image = imageBuffer.toString('base64');
-        
+
+        if (!base64Images || base64Images.length === 0) {
+            throw new Error('No image content provided for OCR.');
+        }
+
+        // Gọi Vision API theo batch (giữ thứ tự trang)
         const body = {
-            requests: [
-                {
-                    image: { content: base64Image },
-                    features: [{ type: 'DOCUMENT_TEXT_DETECTION' }]
-                }
-            ]
+            requests: base64Images.map(img => ({
+                image: { content: img.content },
+                features: [{ type: 'DOCUMENT_TEXT_DETECTION' }]
+            }))
         };
 
         const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`, {
@@ -569,41 +633,39 @@ async function startOcrJob(documentId, fileUrl) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
-        
         const json = await resp.json();
-        
+
         if (json.error) {
             throw new Error(`Vision API Error: ${json.error.message || JSON.stringify(json.error)}`);
         }
-        
-        const responseData = json.responses && json.responses[0];
-        const responseError = responseData && responseData.error;
-        
-        if (responseError) {
-             throw new Error(`Image processing failed: Code ${responseError.code}, Message: ${responseError.message}`);
+        const responses = Array.isArray(json.responses) ? json.responses : [];
+        const pageTexts = [];
+        for (let i = 0; i < responses.length; i++) {
+            const r = responses[i];
+            if (r && r.error) {
+                throw new Error(`Image processing failed at page ${i + 1}: Code ${r.error.code}, Message: ${r.error.message}`);
+            }
+            const text = r && r.fullTextAnnotation && r.fullTextAnnotation.text ? r.fullTextAnnotation.text : '';
+            pageTexts.push(text);
         }
+        const finalOcrData = pageTexts.filter(Boolean).join('\n\n--- PAGE BREAK ---\n\n');
 
-        const rawOcrText = responseData && 
-                           responseData.fullTextAnnotation && 
-                           responseData.fullTextAnnotation.text;
-                           
-        const finalOcrData = rawOcrText || '';
+        const updatedDoc = await Document.findByIdAndUpdate(
+            documentId,
+            { $set: { ocrResult: finalOcrData, status: 'OCR_COMPLETED', updatedAt: new Date() } },
+            { new: true }
+        );
 
-        const updatedDoc = await Document.findByIdAndUpdate(documentId, {
-            $set: { ocrResult: finalOcrData, status: 'OCR_COMPLETED', updatedAt: new Date() }
-        }, { new: true });
-
-        // Cập nhật bundle status sau khi OCR thành công
         if (updatedDoc && updatedDoc.bundleId) {
             await updateBundleStatusFromDocuments(updatedDoc.bundleId);
         }
     } catch (err) {
-        console.error("OCR Job Failed:", err.message);
-        const failedDoc = await Document.findByIdAndUpdate(documentId, {
-            $set: { status: 'REJECTED', rejectionReason: `OCR error: ${err.message}`, updatedAt: new Date() }
-        }, { new: true });
-
-        // Cập nhật bundle status sau khi OCR thất bại
+        console.error('OCR Job Failed:', err.message);
+        const failedDoc = await Document.findByIdAndUpdate(
+            documentId,
+            { $set: { status: 'REJECTED', rejectionReason: `OCR error: ${err.message}`, updatedAt: new Date() } },
+            { new: true }
+        );
         if (failedDoc && failedDoc.bundleId) {
             await updateBundleStatusFromDocuments(failedDoc.bundleId);
         }
