@@ -29,12 +29,24 @@ const staffReview = asyncHandler(async (req, res) => {
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Cập nhật trạng thái bộ chứng từ thành công', data: result });
 });
 
+const staffRetryOcr = asyncHandler(async (req, res) => {
+    const result = await docHandle.staffRetryOcr(req.userId, req.params.bundleId, req.params.documentId);
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Đã khởi chạy lại OCR cho chứng từ', data: result });
+});
+
+const staffRetryOcrForBundle = asyncHandler(async (req, res) => {
+    const result = await docHandle.staffRetryOcrForBundle(req.userId, req.params.bundleId);
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Đã khởi chạy lại OCR cho các chứng từ lỗi trong bộ', data: result });
+});
+
 module.exports = {
     supplierCreate,
     supplierUpdate,
     supplierList,
     staffList,
-    staffReview
+    staffReview,
+    staffRetryOcr,
+    staffRetryOcrForBundle
 };
 
 

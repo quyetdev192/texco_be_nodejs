@@ -6,6 +6,32 @@ const CompanyModelClass = require('../models/company.model');
 const constants = require('../../core/utils/constants');
 const helpers = require('../../core/utils/helpers');
 
+// OCR concurrency controls (in-memory)
+let currentOcrWorkers = 0;
+const ocrQueue = [];
+const OCR_MAX_CONCURRENCY = parseInt(process.env.OCR_MAX_CONCURRENCY || '3', 10);
+
+function enqueueOcr(documentId) {
+    return new Promise((resolve) => {
+        ocrQueue.push({ documentId, resolve });
+        drainOcrQueue();
+    });
+}
+
+function drainOcrQueue() {
+    while (currentOcrWorkers < OCR_MAX_CONCURRENCY && ocrQueue.length > 0) {
+        const job = ocrQueue.shift();
+        currentOcrWorkers += 1;
+        runOcrJob(job.documentId)
+            .catch(() => {})
+            .finally(() => {
+                currentOcrWorkers -= 1;
+                job.resolve();
+                setImmediate(drainOcrQueue);
+            });
+    }
+}
+
 function buildModelFromClass(modelClass) {
     const modelName = modelClass.name;
     if (mongoose.models[modelName]) return mongoose.models[modelName];
@@ -298,6 +324,7 @@ async function supplierList(userId, query) {
             .limit(limit)
             .populate('companyId', 'name taxCode type')
             .populate('uploadedBy', 'username email fullName')
+            .populate('approvedBy', 'username email fullName phone')
             .lean(),
         Bundle.countDocuments(conditions)
     ]);
@@ -343,10 +370,10 @@ async function supplierList(userId, query) {
             reviewNotes: bundle.reviewNotes || [],
             companyId: bundle.companyId,
             uploadedBy: bundle.uploadedBy,
+            approvedBy: bundle.approvedBy, // populated with username, email, fullName, phone
+            approvedAt: bundle.approvedAt,
             createdAt: bundle.createdAt,
             updatedAt: bundle.updatedAt,
-            approvedBy: bundle.approvedBy,
-            approvedAt: bundle.approvedAt,
             documents: documents
         };
     });
@@ -591,67 +618,88 @@ async function staffReview(staffUserId, bundleId, payload) {
 }
 
 async function startOcrJob(documentId) {
+    await enqueueOcr(documentId);
+}
+
+async function runOcrJob(documentId) {
     try {
         const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
         if (!GOOGLE_VISION_API_KEY) throw new Error('Missing GOOGLE_VISION_API_KEY');
 
-        // 1. Lấy danh sách URL ảnh OCR từ DB (ocrPages mới)
-        // ✅ Cần chọn thêm trường ocrPages ở đây
-        const doc = await Document.findById(documentId).select('ocrPages').lean(); 
+        // 1) Lấy danh sách URL ảnh OCR
+        const doc = await Document.findById(documentId).select('ocrPages').lean();
         const ocrPages = doc?.ocrPages || [];
-        
-        if (!ocrPages || ocrPages.length === 0) {
-            throw new Error('No OCR image URLs found for this document.');
-        }
+        if (ocrPages.length === 0) throw new Error('No OCR image URLs found for this document.');
 
-        // 2. Tải từng ảnh về và chuẩn bị payload cho Vision API
-        const visionRequests = [];
-        for (const page of ocrPages) {
-            const fetchResp = await fetch(page.ocrStoragePath);
-            if (!fetchResp.ok) {
-                throw new Error(`Failed to fetch OCR image from URL for page ${page.page}: ${fetchResp.statusText}`);
-            }
-
-            // ✅ SỬA LỖI: Sử dụng .arrayBuffer() và Buffer.from()
-            const arrayBuffer = await fetchResp.arrayBuffer(); 
-            const buffer = Buffer.from(arrayBuffer); 
-            const base64Content = buffer.toString('base64');
-            
-            visionRequests.push({
-                image: { content: base64Content },
-                features: [{ type: 'DOCUMENT_TEXT_DETECTION' }]
-            });
-        }
-        // 3. Gọi Vision API theo batch
-        const body = { requests: visionRequests };
-        const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
+        // 2) Tải ảnh song song với giới hạn
+        const FETCH_CONCURRENCY = parseInt(process.env.OCR_FETCH_CONCURRENCY || '5', 10);
+        const fetchedBase64 = new Array(ocrPages.length).fill(null);
+        let inFlight = 0;
+        let idx = 0;
+        await new Promise((resolve) => {
+            const pump = () => {
+                while (inFlight < FETCH_CONCURRENCY && idx < ocrPages.length) {
+                    const pageIndex = idx++;
+                    const page = ocrPages[pageIndex];
+                    inFlight += 1;
+                    fetch(page.ocrStoragePath)
+                        .then(r => {
+                            if (!r.ok) throw new Error(`Fetch failed for page ${page.page}: ${r.statusText}`);
+                            return r.arrayBuffer();
+                        })
+                        .then(ab => Buffer.from(ab).toString('base64'))
+                        .then(base64 => { fetchedBase64[pageIndex] = base64; })
+                        .catch(() => { fetchedBase64[pageIndex] = null; })
+                        .finally(() => {
+                            inFlight -= 1;
+                            if (idx >= ocrPages.length && inFlight === 0) resolve();
+                            else pump();
+                        });
+                }
+            };
+            pump();
         });
-        const json = await resp.json();
 
-        if (json.error) {
-            throw new Error(`Vision API Error: ${json.error.message || JSON.stringify(json.error)}`);
-        }
-        const responses = Array.isArray(json.responses) ? json.responses : [];
+        // 3) Chia batch gọi Vision API để tránh limit
+        const BATCH_SIZE = parseInt(process.env.OCR_BATCH_SIZE || '10', 10);
+        const requests = fetchedBase64
+            .map(b64 => (b64 ? { image: { content: b64 }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }] } : null))
+            .filter(Boolean);
+
         const pageTexts = [];
-        for (let i = 0; i < responses.length; i++) {
-            const r = responses[i];
-            if (r && r.error) {
-                throw new Error(`Image processing failed at page ${i + 1}: Code ${r.error.code}, Message: ${r.error.message}`);
+        for (let i = 0; i < requests.length; i += BATCH_SIZE) {
+            const slice = requests.slice(i, i + BATCH_SIZE);
+            if (slice.length === 0) continue;
+            const body = { requests: slice };
+            try {
+                const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const json = await resp.json();
+                if (json.error) {
+                    continue; // bỏ qua batch lỗi
+                }
+                const responses = Array.isArray(json.responses) ? json.responses : [];
+                for (const r of responses) {
+                    if (r && r.error) { pageTexts.push(''); continue; }
+                    const text = r && r.fullTextAnnotation && r.fullTextAnnotation.text ? r.fullTextAnnotation.text : '';
+                    pageTexts.push(text);
+                }
+            } catch (_) {
+                continue; // bỏ qua batch lỗi
             }
-            const text = r && r.fullTextAnnotation && r.fullTextAnnotation.text ? r.fullTextAnnotation.text : '';
-            pageTexts.push(text);
         }
+
         const finalOcrData = pageTexts.filter(Boolean).join('\n\n--- PAGE BREAK ---\n\n');
+        if (!finalOcrData) throw new Error('No OCR text extracted from any page');
 
         const updatedDoc = await Document.findByIdAndUpdate(
             documentId,
             { $set: { ocrResult: finalOcrData, status: 'OCR_COMPLETED', updatedAt: new Date() } },
             { new: true }
         );
-
         if (updatedDoc && updatedDoc.bundleId) {
             await updateBundleStatusFromDocuments(updatedDoc.bundleId);
         }
@@ -667,13 +715,122 @@ async function startOcrJob(documentId) {
         }
     }
 }
+
+// Staff: Thử lại OCR cho 1 chứng từ bị lỗi trong 1 bundle
+async function staffRetryOcr(staffUserId, bundleId, documentId) {
+    if (!bundleId || !mongoose.isValidObjectId(bundleId)) {
+        const err = new Error('BundleId không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        throw err;
+    }
+    if (!documentId || !mongoose.isValidObjectId(documentId)) {
+        const err = new Error('DocumentId không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        throw err;
+    }
+
+    // Kiểm tra bundle tồn tại
+    const bundle = await Bundle.findById(bundleId);
+    if (!bundle) {
+        const err = new Error('Không tìm thấy bộ chứng từ');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        throw err;
+    }
+
+    // Kiểm tra document thuộc bundle
+    const doc = await Document.findOne({ _id: documentId, bundleId: bundle._id });
+    if (!doc) {
+        const err = new Error('Không tìm thấy chứng từ trong bộ này');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        throw err;
+    }
+
+    // Chỉ cho retry khi đang lỗi (REJECTED) hoặc đã OCR_FAILED ở mức bundle
+    if (doc.status === 'OCR_COMPLETED') {
+        const err = new Error('Chứng từ đã OCR thành công, không thể thử lại');
+        err.status = constants.HTTP_STATUS.CONFLICT;
+        throw err;
+    }
+    if (doc.status === 'OCR_PROCESSING') {
+        const err = new Error('Chứng từ đang được OCR');
+        err.status = constants.HTTP_STATUS.CONFLICT;
+        throw err;
+    }
+
+    // Cập nhật trạng thái document về OCR_PROCESSING và xoá lý do lỗi trước đó
+    doc.status = 'OCR_PROCESSING';
+    doc.rejectionReason = undefined;
+    // Xoá kết quả cũ nếu muốn làm sạch
+    doc.ocrResult = '';
+    doc.updatedAt = new Date();
+    await doc.save();
+
+    // Nếu bundle không ở OCR_PROCESSING, chuyển về OCR_PROCESSING để phản ánh đang xử lý lại
+    if (bundle.status !== 'OCR_PROCESSING') {
+        bundle.status = 'OCR_PROCESSING';
+        bundle.updatedAt = new Date();
+        await bundle.save();
+    }
+
+    // Khởi chạy lại OCR async
+    setImmediate(() => startOcrJob(doc._id).catch(() => {}));
+
+    // Trả về chi tiết bundle cho STAFF
+    return await getBundleDetail(staffUserId, bundleId.toString(), true);
+}
+
+// Staff: Thử lại OCR cho tất cả chứng từ lỗi (REJECTED) trong 1 bundle
+async function staffRetryOcrForBundle(staffUserId, bundleId) {
+    if (!bundleId || !mongoose.isValidObjectId(bundleId)) {
+        const err = new Error('BundleId không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        throw err;
+    }
+
+    const bundle = await Bundle.findById(bundleId);
+    if (!bundle) {
+        const err = new Error('Không tìm thấy bộ chứng từ');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        throw err;
+    }
+
+    // Lấy danh sách chứng từ đang lỗi OCR
+    const failedDocs = await Document.find({ bundleId: bundle._id, status: 'REJECTED' }).lean();
+    if (!failedDocs || failedDocs.length === 0) {
+        const err = new Error('Không có chứng từ nào ở trạng thái lỗi để retry');
+        err.status = constants.HTTP_STATUS.CONFLICT;
+        throw err;
+    }
+
+    // Đặt lại trạng thái và khởi chạy lại OCR cho từng chứng từ lỗi
+    const ids = failedDocs.map(d => d._id);
+    await Document.updateMany(
+        { _id: { $in: ids } },
+        { $set: { status: 'OCR_PROCESSING', ocrResult: '', rejectionReason: undefined, updatedAt: new Date() } }
+    );
+
+    if (bundle.status !== 'OCR_PROCESSING') {
+        bundle.status = 'OCR_PROCESSING';
+        bundle.updatedAt = new Date();
+        await bundle.save();
+    }
+
+    // Khởi chạy lại OCR async cho từng document
+    for (const d of failedDocs) {
+        setImmediate(() => startOcrJob(d._id).catch(() => {}));
+    }
+
+    return await getBundleDetail(staffUserId, bundleId.toString(), true);
+}
 module.exports = {
     supplierCreate,
     supplierUpdate,
     supplierList,
     getBundleDetail,
     staffList,
-    staffReview
+    staffReview,
+    staffRetryOcr,
+    staffRetryOcrForBundle
 };
 
 

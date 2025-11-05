@@ -29,5 +29,9 @@ router.put('/documents/:bundleId', verifyToken, requireRole('SUPPLIER'), documen
 // Staff (C/O) - 2 APIs
 router.get('/review/documents', verifyToken, requireRole('STAFF'), documentController.staffList);
 router.put('/review/documents/:bundleId/review', verifyToken, requireRole('STAFF'), documentController.staffReview);
+// Retry OCR for a specific document in a bundle
+router.put('/review/documents/:bundleId/ocr-retry/:documentId', verifyToken, requireRole('STAFF'), documentController.staffRetryOcr);
+// Retry OCR for all failed documents (REJECTED) in a bundle
+router.put('/review/documents/:bundleId/ocr-retry', verifyToken, requireRole('STAFF'), documentController.staffRetryOcrForBundle);
 
 module.exports = router;
