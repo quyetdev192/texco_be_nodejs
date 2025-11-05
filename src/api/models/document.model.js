@@ -18,6 +18,9 @@ class Document {
                     "EXPORT_DECLARATION", "COMMERCIAL_INVOICE", "BILL_OF_LADING", "BOM"
                 ]
             },
+            note: { type: String, default: '' }, // Ghi chú của NCC khi upload
+            // Liên kết với bộ chứng từ
+            bundleId: { type: Schema.Types.ObjectId, ref: 'Bundle', required: true },
             status: {
                 type: String,
                 required: true,
@@ -25,14 +28,15 @@ class Document {
                 default: "PENDING_REVIEW"
             },
             rejectionReason: String,
-            ocrResult: { type: Object }, // Kết quả JSON thô từ OCR
+            ocrResult: { type: String, default: '' },
             
-            // --- Tracking & Security (Xử lý "không gian riêng") ---
+            // --- Tracking & Security ---
             companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
             uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
             approvedBy: { type: Schema.Types.ObjectId, ref: 'User' }, // NV Staff duyệt
             
             createdAt: { type: Date, default: Date.now },
+            updatedAt: { type: Date, default: Date.now },
             approvedAt: Date
         };
     }

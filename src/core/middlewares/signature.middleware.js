@@ -60,6 +60,10 @@ const shouldSkipSignature = (path) => {
         '/health',
         '/api/health',
         '/api/v1/health',
+        // Public endpoints for web
+        '/api/v1/user/login',
+        '/api/v1/documents',
+        '/api/v1/review/documents',
         '/docs',
         '/docs/swagger.json',
         '/docs/swagger-ui-init.js',

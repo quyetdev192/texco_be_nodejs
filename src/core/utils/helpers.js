@@ -224,6 +224,60 @@ class Helpers {
         }
         return Object.keys(range).length ? range : null;
     }
+
+    // Status text mapping (Document/Bundle status)
+    getStatusText(status) {
+        const statusMap = {
+            'PENDING_REVIEW': 'Chờ duyệt',
+            'REJECTED': 'Từ chối',
+            'OCR_PROCESSING': 'Đang xử lý OCR',
+            'OCR_COMPLETED': 'Hoàn thành OCR',
+            'OCR_FAILED': 'OCR thất bại',
+            'ARCHIVED': 'Đã lưu trữ'
+        };
+        return statusMap[status] || status;
+    }
+
+    // Role text mapping
+    getRoleText(role) {
+        const roleMap = {
+            'SUPPLIER': 'Nhà cung cấp',
+            'STAFF': 'Nhân viên C/O',
+            'MOIT': 'Bộ Công Thương',
+            'ADMIN': 'Quản trị viên'
+        };
+        return roleMap[role] || role;
+    }
+
+    // Document type text mapping
+    getDocumentTypeText(documentType) {
+        const typeMap = {
+            'VAT_INVOICE': 'Hóa đơn VAT',
+            'IMPORT_DECLARATION': 'Tờ khai nhập khẩu',
+            'PURCHASE_LIST': 'Danh sách mua hàng',
+            'NPL_ORIGIN_CERT': 'Giấy chứng nhận xuất xứ',
+            'EXPORT_DECLARATION': 'Tờ khai xuất khẩu',
+            'COMMERCIAL_INVOICE': 'Hóa đơn thương mại',
+            'BILL_OF_LADING': 'Vận đơn',
+            'BOM': 'Danh mục nguyên vật liệu'
+        };
+        return typeMap[documentType] || documentType;
+    }
+
+    // Add text fields to object
+    addTextFields(obj, fields = ['status', 'role', 'documentType']) {
+        const result = { ...obj };
+        if (fields.includes('status') && obj.status) {
+            result.status_text = this.getStatusText(obj.status);
+        }
+        if (fields.includes('role') && obj.role) {
+            result.role_text = this.getRoleText(obj.role);
+        }
+        if (fields.includes('documentType') && obj.documentType) {
+            result.documentType_text = this.getDocumentTypeText(obj.documentType);
+        }
+        return result;
+    }
 }
 
 module.exports = new Helpers(); 

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const UserModelClass = require('../models/user.model');
+const CompanyModelClass = require('../models/company.model');
 const constants = require('../../core/utils/constants');
 const helpers = require('../../core/utils/helpers');
 
@@ -14,6 +15,7 @@ function buildModelFromClass(modelClass) {
 }
 
 const User = buildModelFromClass(UserModelClass);
+const Company = buildModelFromClass(CompanyModelClass);
 
 async function createUser(payload) {
     const { username, email, password, fullName, role, companyId } = payload || {};
@@ -86,6 +88,7 @@ async function createUser(payload) {
     const saved = await userDoc.save();
     const result = saved.toObject();
     delete result.password;
+    result.role_text = helpers.getRoleText(result.role);
     return result;
 }
 
@@ -179,6 +182,7 @@ async function login(payload) {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        role_text: helpers.getRoleText(user.role),
         companyId: user.companyId,
         phone: user.phone || '',
         avatarUrl: user.avatarUrl || '',
@@ -191,8 +195,33 @@ async function login(payload) {
     return { user: safeUser, tokens: { accessToken, refreshToken } };
 }
 
+async function getProfile(userId) {
+    if (!userId) {
+        const err = new Error('Thiếu thông tin người dùng');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        err.code = constants.ERROR_CODES.VALIDATION_REQUIRED_FIELD;
+        throw err;
+    }
+
+    const user = await User.findById(userId)
+        .populate('companyId')
+        .lean();
+    
+    if (!user) {
+        const err = new Error('Không tìm thấy người dùng');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        err.code = constants.ERROR_CODES.DB_NOT_FOUND;
+        throw err;
+    }
+
+    const { password: _pw, ...safeUser } = user;
+    safeUser.role_text = helpers.getRoleText(safeUser.role);
+    
+    return safeUser;
+}
+
 async function updateProfile(userId, payload) {
-    const { fullName, phone, avatarUrl, address, email } = payload || {};
+    const { fullName, phone, avatarUrl, address, email, company } = payload || {};
 
     if (!userId) {
         const err = new Error('Thiếu thông tin người dùng');
@@ -201,6 +230,16 @@ async function updateProfile(userId, payload) {
         throw err;
     }
 
+    // Lấy user hiện tại để kiểm tra companyId
+    const currentUser = await User.findById(userId).lean();
+    if (!currentUser) {
+        const err = new Error('Không tìm thấy người dùng');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        err.code = constants.ERROR_CODES.DB_NOT_FOUND;
+        throw err;
+    }
+
+    // Cập nhật thông tin user
     const updates = {};
     if (typeof fullName === 'string' && fullName.trim()) updates.fullName = fullName.trim();
     if (typeof phone === 'string') updates.phone = phone.trim();
@@ -235,8 +274,43 @@ async function updateProfile(userId, payload) {
         throw err;
     }
 
+    // Cập nhật thông tin company nếu có
+    let companyData = null;
+    if (company && updated.companyId) {
+        const companyUpdates = {};
+        if (typeof company.name === 'string' && company.name.trim()) {
+            companyUpdates.name = company.name.trim();
+        }
+        if (typeof company.taxCode === 'string' && company.taxCode.trim()) {
+            companyUpdates.taxCode = company.taxCode.trim();
+        }
+        if (typeof company.address === 'string') {
+            companyUpdates.address = company.address.trim();
+        }
+        if (typeof company.type === 'string' && ['EXPORTER', 'SUPPLIER'].includes(company.type)) {
+            companyUpdates.type = company.type;
+        }
+
+        if (Object.keys(companyUpdates).length > 0) {
+            companyUpdates.updatedAt = new Date();
+            const updatedCompany = await Company.findByIdAndUpdate(
+                updated.companyId,
+                { $set: companyUpdates },
+                { new: true, lean: true }
+            );
+            companyData = updatedCompany;
+        } else {
+            // Nếu không có updates nhưng muốn lấy thông tin company
+            companyData = await Company.findById(updated.companyId).lean();
+        }
+    } else if (updated.companyId) {
+        // Lấy thông tin company hiện tại
+        companyData = await Company.findById(updated.companyId).lean();
+    }
+
     const { password: _pw, ...safeUser } = updated;
-    return safeUser;
+    safeUser.role_text = helpers.getRoleText(safeUser.role);
+    return { ...safeUser, company: companyData };
 }
 async function  listUsers(query) {
     const { page, limit, skip, sort } = helpers.buildPagination(query, { sort: '-createdAt' });
@@ -275,6 +349,7 @@ async function  listUsers(query) {
         email: u.email,
         fullName: u.fullName,
         role: u.role,
+        role_text: helpers.getRoleText(u.role),
         companyId: u.companyId,
         phone: u.phone || '',
         avatarUrl: u.avatarUrl || '',
@@ -309,6 +384,7 @@ async function getUserById(id) {
         email: u.email,
         fullName: u.fullName,
         role: u.role,
+        role_text: helpers.getRoleText(u.role),
         companyId: u.companyId,
         phone: u.phone || '',
         avatarUrl: u.avatarUrl || '',
@@ -390,6 +466,7 @@ async function  updateUser(id, payload) {
         email: updated.email,
         fullName: updated.fullName,
         role: updated.role,
+        role_text: helpers.getRoleText(updated.role),
         companyId: updated.companyId,
         phone: updated.phone || '',
         avatarUrl: updated.avatarUrl || '',
@@ -420,6 +497,7 @@ module.exports = {
     createUser,
     ensureAdminSeed,
     login,
+    getProfile,
     updateProfile,
     listUsers,
     getUserById,

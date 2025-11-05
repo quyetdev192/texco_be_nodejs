@@ -14,10 +14,16 @@ const login = asyncHandler(async (req, res) => {
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Đăng nhập thành công', data: result });
 });
 
+const getProfile = asyncHandler(async (req, res) => {
+    const userId = req.userId;
+    const result = await userHandle.getProfile(userId);
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Thành công', data: result });
+});
+
 const updateProfile = asyncHandler(async (req, res) => {
     const userId = req.userId;
-    const { fullName, phone, avatarUrl, address, email } = req.body || {};
-    const result = await userHandle.updateProfile(userId, { fullName, phone, avatarUrl, address, email });
+    const { fullName, phone, avatarUrl, address, email, company } = req.body || {};
+    const result = await userHandle.updateProfile(userId, { fullName, phone, avatarUrl, address, email, company });
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Cập nhật thông tin thành công', data: result });
 });
 
@@ -51,6 +57,7 @@ const deleteUser = asyncHandler(async (req, res) => {
 module.exports = {
     create,
     login,
+    getProfile,
     updateProfile,
     listUsers,
     getUser,
