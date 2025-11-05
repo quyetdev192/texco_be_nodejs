@@ -20,10 +20,10 @@ class Document {
             },
             note: { type: String, default: '' }, // Ghi chú của NCC khi upload
             // Nội dung base64 đa trang (ưu tiên) và tương thích cũ
-            base64Images: [{
-                content: { type: String }, // Base64 không kèm prefix data:
-                mimeType: { type: String },
-                page: { type: Number }
+            ocrPages: [{
+                page: { type: Number, required: true },       // Số thứ tự trang
+                ocrStoragePath: { type: String, required: true }, // URL/Path của ảnh PNG/JPEG đã upload (từ FE)
+                mimeType: { type: String, default: 'image/png' },
             }],
             // Trường cũ để tương thích ngược (nếu FE chỉ gửi 1 ảnh)
             base64Content: { type: String },

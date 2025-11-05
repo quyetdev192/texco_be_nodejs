@@ -102,46 +102,36 @@ async function supplierCreate(userId, payload) {
             failed.push({ index: idx, message: 'Thiếu fileName/storagePath/documentType' });
             return;
         }
-        // Chuẩn hóa danh sách ảnh base64 (ưu tiên dạng list object FE gửi)
-        let normalizedImages = [];
-        if (Array.isArray(d.base64Images)) {
-            normalizedImages = d.base64Images
-                .filter(it => it && typeof it.content === 'string' && it.content.trim().length > 0)
-                .map((it, i) => ({ content: it.content, mimeType: it.mimeType || d.mimeType || 'image/png', page: it.page ?? (i + 1) }));
-        } else if (Array.isArray(d.base64ContentPages)) {
-            normalizedImages = d.base64ContentPages
-                .filter(s => typeof s === 'string' && s.trim().length > 0)
-                .map((content, i) => ({ content, mimeType: d.mimeType || 'image/png', page: i + 1 }));
-        } else if (d.base64Content) {
-            normalizedImages = [{ content: d.base64Content, mimeType: d.mimeType || 'image/png', page: 1 }];
-        }
-        const firstImage = normalizedImages[0];
-        docsToInsert.push({
-            fileName: d.fileName,
-            storagePath: d.storagePath,
-            documentType: d.documentType,
-            bundleId: bundle._id,
-            note: d.note || '',
-            base64Images: normalizedImages.length > 0 ? normalizedImages : undefined,
-            // Back-compat: set single fields từ trang đầu
-            base64Content: firstImage ? firstImage.content : undefined,
-            mimeType: firstImage ? firstImage.mimeType : (d.mimeType || undefined),
-            companyId: user.companyId,
-            uploadedBy: userId,
-            status: 'PENDING_REVIEW'
-        });
-    });
+        const ocrPages = Array.isArray(d.ocrPages)
+        ? d.ocrPages.filter(p => p && p.ocrStoragePath) // Lọc các URL ảnh hợp lệ
+        : [];
 
-    if (docsToInsert.length === 0) {
-        // Xóa bundle nếu không có document hợp lệ
-        await Bundle.findByIdAndDelete(bundle._id);
-        const err = new Error('Không có chứng từ hợp lệ để tạo');
-        err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
-        throw err;
+    if (ocrPages.length === 0) {
+         failed.push({ index: idx, message: 'Thiếu ocrPages (danh sách URL ảnh OCR cho từng trang)' });
+         return;
     }
 
-    const inserted = await Document.insertMany(docsToInsert);
-    
+    docsToInsert.push({
+        fileName: d.fileName,
+        storagePath: d.storagePath,
+        documentType: d.documentType,
+        bundleId: bundle._id,
+        note: d.note || '',
+        ocrPages: ocrPages, 
+        companyId: user.companyId,
+        uploadedBy: userId,
+        status: 'PENDING_REVIEW'
+    });
+});
+
+if (docsToInsert.length === 0) {
+    // Xóa bundle nếu không có document hợp lệ
+    await Bundle.findByIdAndDelete(bundle._id);
+    const err = new Error('Không có chứng từ hợp lệ để tạo');
+    err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+    throw err;
+}
+const inserted = await Document.insertMany(docsToInsert);    
     // Populate và trả về bundle detail
     const bundleDetail = await Bundle.findById(bundle._id)
         .populate('companyId', 'name taxCode type')
@@ -588,8 +578,7 @@ async function staffReview(staffUserId, bundleId, payload) {
                 )
             );
             // Start OCR từng document với đầy đủ danh sách ảnh
-            setImmediate(() => startOcrJob(doc._id, doc.base64Images && doc.base64Images.length ? doc.base64Images : undefined).catch(() => {}));
-        });
+            setImmediate(() => startOcrJob(doc._id).catch(() => {}));        });
         await Promise.all(updatePromises);
     } else {
         const err = new Error('Action không hợp lệ. Phải là APPROVE hoặc REJECT');
@@ -600,34 +589,41 @@ async function staffReview(staffUserId, bundleId, payload) {
     // Return bundle detail với đầy đủ thông tin
     return await getBundleDetail(staffUserId, bundleId.toString(), true);
 }
-async function startOcrJob(documentId, base64ImagesInput) {
+
+async function startOcrJob(documentId) {
     try {
         const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
         if (!GOOGLE_VISION_API_KEY) throw new Error('Missing GOOGLE_VISION_API_KEY');
 
-        // Lấy danh sách ảnh từ tham số hoặc DB
-        let base64Images = Array.isArray(base64ImagesInput) ? base64ImagesInput : [];
-        if (base64Images.length === 0) {
-            const doc = await Document.findById(documentId).select('base64Images base64Content mimeType').lean();
-            if (doc && Array.isArray(doc.base64Images) && doc.base64Images.length > 0) {
-                base64Images = doc.base64Images.filter(it => it && typeof it.content === 'string' && it.content.trim().length > 0);
-            } else if (doc && doc.base64Content) {
-                base64Images = [{ content: doc.base64Content, mimeType: doc.mimeType || 'image/png', page: 1 }];
+        // 1. Lấy danh sách URL ảnh OCR từ DB (ocrPages mới)
+        // ✅ Cần chọn thêm trường ocrPages ở đây
+        const doc = await Document.findById(documentId).select('ocrPages').lean(); 
+        const ocrPages = doc?.ocrPages || [];
+        
+        if (!ocrPages || ocrPages.length === 0) {
+            throw new Error('No OCR image URLs found for this document.');
+        }
+
+        // 2. Tải từng ảnh về và chuẩn bị payload cho Vision API
+        const visionRequests = [];
+        for (const page of ocrPages) {
+            const fetchResp = await fetch(page.ocrStoragePath);
+            if (!fetchResp.ok) {
+                throw new Error(`Failed to fetch OCR image from URL for page ${page.page}: ${fetchResp.statusText}`);
             }
-        }
 
-        if (!base64Images || base64Images.length === 0) {
-            throw new Error('No image content provided for OCR.');
-        }
-
-        // Gọi Vision API theo batch (giữ thứ tự trang)
-        const body = {
-            requests: base64Images.map(img => ({
-                image: { content: img.content },
+            // ✅ SỬA LỖI: Sử dụng .arrayBuffer() và Buffer.from()
+            const arrayBuffer = await fetchResp.arrayBuffer(); 
+            const buffer = Buffer.from(arrayBuffer); 
+            const base64Content = buffer.toString('base64');
+            
+            visionRequests.push({
+                image: { content: base64Content },
                 features: [{ type: 'DOCUMENT_TEXT_DETECTION' }]
-            }))
-        };
-
+            });
+        }
+        // 3. Gọi Vision API theo batch
+        const body = { requests: visionRequests };
         const resp = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
