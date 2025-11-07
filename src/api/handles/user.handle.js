@@ -155,13 +155,18 @@ async function login(payload) {
     }
 
     const jwt = require('jsonwebtoken');
+    const crypto = require('crypto');
     const jwtCfg = require('../../core/config/security.config').getJwtConfig();
+
+    const newSessionId = crypto.randomBytes(16).toString('hex');
+    await User.findByIdAndUpdate(user._id, { $set: { currentSessionId: newSessionId, updatedAt: new Date() } });
 
     const payloadToken = {
         userId: user._id?.toString(),
         username: user.username,
         email: user.email,
-        roles: [user.role]
+        roles: [user.role],
+        sessionId: newSessionId
     };
 
     const accessToken = jwt.sign(payloadToken, jwtCfg.secret, {

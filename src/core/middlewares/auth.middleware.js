@@ -2,6 +2,17 @@ const jwt = require('jsonwebtoken');
 const securityConfig = require('../config/security.config');
 const logger = require('../config/logger.config');
 const constants = require('../utils/constants');
+const mongoose = require('mongoose');
+const UserModelClass = require('../../api/models/user.model');
+
+function buildModelFromClass(modelClass) {
+    const modelName = modelClass.name;
+    if (mongoose.models[modelName]) return mongoose.models[modelName];
+    const schemaDefinition = modelClass.getSchema();
+    const schema = new mongoose.Schema(schemaDefinition, { collection: modelClass.collection });
+    return mongoose.model(modelName, schema);
+}
+const User = buildModelFromClass(UserModelClass);
 
 const verifyToken = (req, res, next) => {
     try {
@@ -56,14 +67,47 @@ const verifyToken = (req, res, next) => {
             req.user = decoded;
             req.userId = decoded.userId || decoded.id;
 
-            logger.debug('JWT verification successful', {
-                path: req.path,
-                method: req.method,
-                ip: req.ip,
-                userId: req.userId
-            });
+            // Enforce single-device session: sessionId must match DB
+            if (!decoded.sessionId) {
+                return res.status(constants.HTTP_STATUS.UNAUTHORIZED).json({
+                    success: false,
+                    error: {
+                        code: constants.ERROR_CODES.AUTH_TOKEN_INVALID,
+                        message: req.t ? req.t('auth.token.invalid') : 'Invalid access token'
+                    }
+                });
+            }
 
-            next();
+            User.findById(req.userId).lean().then(user => {
+                if (!user || user.currentSessionId !== decoded.sessionId) {
+                    logger.warn('Session mismatch or user not found', { path: req.path, userId: req.userId });
+                    return res.status(constants.HTTP_STATUS.UNAUTHORIZED).json({
+                        success: false,
+                        error: {
+                            code: constants.ERROR_CODES.AUTH_TOKEN_INVALID,
+                            message: req.t ? req.t('auth.token.invalid') : 'Invalid access token'
+                        }
+                    });
+                }
+
+                logger.debug('JWT verification successful', {
+                    path: req.path,
+                    method: req.method,
+                    ip: req.ip,
+                    userId: req.userId
+                });
+
+                next();
+            }).catch(dbErr => {
+                logger.error('DB error during session check', { error: dbErr.message });
+                return res.status(constants.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+                    success: false,
+                    error: {
+                        code: constants.ERROR_CODES.INTERNAL_ERROR,
+                        message: req.t ? req.t('auth.token.error') : 'Token verification error'
+                    }
+                });
+            });
         });
     } catch (error) {
         logger.error('JWT verification error', {
@@ -281,22 +325,57 @@ const refreshToken = (req, res, next) => {
                 });
             }
 
-            const newAccessToken = jwt.sign(
-                {
-                    userId: decoded.userId,
-                    email: decoded.email,
-                    roles: decoded.roles
-                },
-                jwtConfig.secret,
-                {
-                    expiresIn: jwtConfig.expiresIn,
-                    issuer: jwtConfig.issuer,
-                    audience: jwtConfig.audience
-                }
-            );
+            // Require and validate sessionId against DB to enforce single-device
+            if (!decoded.sessionId || !decoded.userId) {
+                return res.status(constants.HTTP_STATUS.UNAUTHORIZED).json({
+                    success: false,
+                    error: {
+                        code: constants.ERROR_CODES.AUTH_TOKEN_INVALID,
+                        message: req.t ? req.t('auth.refreshToken.invalid') : 'Invalid refresh token'
+                    }
+                });
+            }
 
-            req.newAccessToken = newAccessToken;
-            next();
+            User.findById(decoded.userId).lean().then(user => {
+                if (!user || user.currentSessionId !== decoded.sessionId) {
+                    logger.warn('Refresh session mismatch or user not found', { userId: decoded.userId });
+                    return res.status(constants.HTTP_STATUS.UNAUTHORIZED).json({
+                        success: false,
+                        error: {
+                            code: constants.ERROR_CODES.AUTH_TOKEN_INVALID,
+                            message: req.t ? req.t('auth.refreshToken.invalid') : 'Invalid refresh token'
+                        }
+                    });
+                }
+
+                const newAccessToken = jwt.sign(
+                    {
+                        userId: decoded.userId,
+                        username: decoded.username,
+                        email: decoded.email,
+                        roles: decoded.roles,
+                        sessionId: decoded.sessionId
+                    },
+                    jwtConfig.secret,
+                    {
+                        expiresIn: jwtConfig.expiresIn,
+                        issuer: jwtConfig.issuer,
+                        audience: jwtConfig.audience
+                    }
+                );
+
+                req.newAccessToken = newAccessToken;
+                next();
+            }).catch(dbErr => {
+                logger.error('DB error during refresh session check', { error: dbErr.message });
+                return res.status(constants.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+                    success: false,
+                    error: {
+                        code: constants.ERROR_CODES.INTERNAL_ERROR,
+                        message: req.t ? req.t('auth.refreshToken.error') : 'Token refresh error'
+                    }
+                });
+            });
         });
     } catch (error) {
         logger.error('Token refresh error', {

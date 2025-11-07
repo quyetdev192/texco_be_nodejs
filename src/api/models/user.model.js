@@ -26,6 +26,7 @@ class User {
             },
             companyId: { type: Schema.Types.ObjectId, ref: 'Company' },
             isDisabled: { type: Boolean, default: false },
+            currentSessionId: { type: String, default: '' },
             createdAt: { type: Date, default: Date.now },
             updatedAt: { type: Date, default: Date.now }
         };
