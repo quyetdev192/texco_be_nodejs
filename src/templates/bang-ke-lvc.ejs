@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng kê LVC</title>
+    <style>
+        /* (Dùng chung CSS với mẫu RVC) */
+        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid black; padding: 5px; text-align: center; }
+        .header { text-align: center; font-weight: bold; }
+        .rvc-calc { margin-top: 20px; border: 1px solid black; padding: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h4>PHỤ LỤC VII</h4>
+        <h4>BẢNG KÊ KHAI HÀNG HÓA XUẤT KHẨU ĐẠT TIÊU CHÍ "LVC"</h4>
+    </div>
+
+    <div class="rvc-calc">
+        <p><strong>b) Công thức tính LVC gián tiếp:</strong></p>
+        <p>
+            LVC = (Trị giá FOB - Trị giá VNM) / Trị giá FOB * 100%
+        </p>
+        <p>
+            LVC = (<%= coApp.items[0].fobValue.toFixed(2) %> - <%= coApp.items[0].totalValueNonOriginating.toFixed(2) %>) / <%= coApp.items[0].fobValue.toFixed(2) %> * 100%
+        </p>
+        <p>
+            <strong>LVC = <%= coApp.items[0].rvcPercent.toFixed(2) %> %</strong>
+        </p>
+    </div>
+
+    <p><strong>Kết luận:</strong> Hàng hóa đáp ứng tiêu chí LVC <%= coApp.items[0].rvcPercent.toFixed(2) %> %.</p>
+</body>
+</html>

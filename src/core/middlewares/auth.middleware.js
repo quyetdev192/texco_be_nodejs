@@ -179,6 +179,11 @@ const requireRole = (roles) => {
             });
         }
 
+        // Admin has full access bypass for role checks
+        if (isAdmin(req.user)) {
+            return next();
+        }
+
         const userRoles = req.user.roles || [];
         const requiredRoles = Array.isArray(roles) ? roles : [roles];
 
@@ -287,7 +292,7 @@ const requireOwnership = (getResourceUserId) => {
 
 
 const isAdmin = (user) => {
-    return user.roles && user.roles.includes('admin');
+    return user.roles && user.roles.includes('ADMIN');
 };
 
 
