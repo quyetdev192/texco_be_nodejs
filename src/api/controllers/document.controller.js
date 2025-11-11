@@ -39,6 +39,11 @@ const staffRetryOcrForBundle = asyncHandler(async (req, res) => {
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Đã khởi chạy lại OCR cho các chứng từ lỗi trong bộ', data: result });
 });
 
+const staffAddDocuments = asyncHandler(async (req, res) => {
+    const result = await docHandle.staffAddDocuments(req.userId, req.params.bundleId, req.body || {});
+    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Đã bổ sung chứng từ và khởi chạy OCR', data: result });
+});
+
 module.exports = {
     supplierCreate,
     supplierUpdate,
@@ -46,7 +51,8 @@ module.exports = {
     staffList,
     staffReview,
     staffRetryOcr,
-    staffRetryOcrForBundle
+    staffRetryOcrForBundle,
+    staffAddDocuments
 };
 
 
