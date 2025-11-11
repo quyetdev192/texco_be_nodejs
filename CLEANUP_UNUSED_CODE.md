@@ -285,20 +285,61 @@ curl -X POST http://localhost:3000/api/v1/co/upload-documents \
 # Expected: 404 Not Found
 ```
 
+## Models Deleted
+
+### FIFO Allocation Models (17 files)
+- ❌ `allocationDetail.model.js`
+- ❌ `breakdownResult.model.js`
+- ❌ `skuResult.model.js`
+- ❌ `skuDraft.model.js`
+- ❌ `tonKhoDetail.model.js`
+- ❌ `suDungDinhMuc.model.js`
+- ❌ `phanBoXuat.model.js`
+- ❌ `inventoryIn.model.js`
+- ❌ `inventoryOut.model.js`
+- ❌ `material.model.js`
+- ❌ `product.model.js`
+- ❌ `originRule.model.js`
+- ❌ `issuingAuthority.model.js`
+- ❌ `coApplication.model.js`
+- ❌ `rawBomData.model.js`
+- ❌ `rawInvoiceData.model.js`
+- ❌ `rawNplData.model.js`
+
+### Handle Functions Deleted
+- ❌ `coCalculation.handle.js` (entire file)
+- ❌ `coProcess.handle.uploadDocuments()`
+- ❌ `coProcess.handle.createLohangDraft()`
+- ❌ `coProcess.handle.calculateSkuAllocation()`
+- ❌ `coProcess.handle.processSingleSku()`
+- ❌ `coProcess.handle.allocateFifo()`
+- ❌ `coProcess.handle.calculateOriginResult()`
+- ❌ `coProcess.handle.checkCTC()`
+- ❌ `coProcess.handle.saveToInventory()`
+- ❌ `coProcess.handle.saveBomData()`
+
+### Utils Deleted
+- ❌ `excel.utils.js` imports removed from controllers
+
 ## Summary
 
 ### Deleted
-- **8 endpoints** removed
-- **~300 lines** of code deleted
-- **6 controller functions** removed
+- **8 API endpoints** removed
+- **17 model files** deleted
+- **1 handle file** deleted (`coCalculation.handle.js`)
+- **10+ handle functions** removed
+- **~2000+ lines** of code deleted
 
 ### Remaining
 - **40 active endpoints**
+- **9 active models**
 - All endpoints aligned with FE usage
 - Clean and maintainable codebase
 
 ### Impact
 - ✅ No breaking changes for FE
-- ✅ Improved code quality
+- ✅ Improved code quality (~70% reduction in unused code)
 - ✅ Better security posture
 - ✅ Easier to maintain
+- ✅ Faster server startup
+- ✅ Reduced memory footprint
