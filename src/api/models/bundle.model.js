@@ -12,7 +12,7 @@ class Bundle {
             status: {
                 type: String,
                 required: true,
-                enum: ["PENDING_REVIEW", "REJECTED", "OCR_PROCESSING", "OCR_COMPLETED", "OCR_FAILED", "ARCHIVED"],
+                enum: ["PENDING_REVIEW", "REJECTED", "OCR_PROCESSING", "OCR_COMPLETED", "OCR_FAILED", "APPROVED", "ARCHIVED"],
                 default: "PENDING_REVIEW"
             },
             rejectionReason: String,

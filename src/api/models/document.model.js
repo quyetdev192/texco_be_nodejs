@@ -38,6 +38,8 @@ class Document {
             },
             rejectionReason: String,
             ocrResult: { type: String, default: '' },
+            needsGeminiDetection: { type: Boolean, default: false }, // Flag để dùng Gemini detect type sau OCR
+            isExcelFile: { type: Boolean, default: false }, // Flag để biết là Excel file (không cần OCR)
             
             // --- Tracking & Security ---
             companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },

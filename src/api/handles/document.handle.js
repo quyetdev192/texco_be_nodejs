@@ -5,6 +5,8 @@ const UserModelClass = require('../models/user.model');
 const CompanyModelClass = require('../models/company.model');
 const constants = require('../../core/utils/constants');
 const helpers = require('../../core/utils/helpers');
+const { detectDocumentType, validateDocumentType } = require('../../core/utils/documentTypeDetector');
+const { getGeminiService } = require('../../core/utils/gemini.utils');
 
 // OCR concurrency controls (in-memory)
 let currentOcrWorkers = 0;
@@ -123,32 +125,85 @@ async function supplierCreate(userId, payload) {
     // Tạo Documents
     const docsToInsert = [];
     const failed = [];
+    const warnings = [];
     documents.forEach((d, idx) => {
-        if (!d || !d.fileName || !d.storagePath || !d.documentType) {
-            failed.push({ index: idx, message: 'Thiếu fileName/storagePath/documentType' });
+        if (!d || !d.fileName || !d.storagePath) {
+            failed.push({ index: idx, message: 'Thiếu fileName/storagePath' });
             return;
         }
-        const ocrPages = Array.isArray(d.ocrPages)
-        ? d.ocrPages.filter(p => p && p.ocrStoragePath) // Lọc các URL ảnh hợp lệ
-        : [];
+        
+        // Auto-detect document type nếu không được cung cấp
+        let documentType = d.documentType;
+        let needsGeminiDetection = false;
+        
+        if (!documentType) {
+            // Lớp 1: Thử detect từ filename
+            documentType = detectDocumentType(d.fileName);
+            
+            if (documentType) {
+                warnings.push({ 
+                    index: idx, 
+                    fileName: d.fileName, 
+                    detectedType: documentType, 
+                    detectionMethod: 'filename',
+                    message: 'Đã tự động xác định loại chứng từ từ tên file' 
+                });
+            } else {
+                // Lớp 2: Đánh dấu cần dùng Gemini sau khi OCR
+                documentType = 'COMMERCIAL_INVOICE'; // Tạm dùng default để pass validation
+                needsGeminiDetection = true;
+                warnings.push({ 
+                    index: idx, 
+                    fileName: d.fileName, 
+                    message: 'Sẽ tự động xác định loại chứng từ bằng AI sau khi OCR' 
+                });
+            }
+        } else {
+            // Validate nếu user đã chọn type
+            const validation = validateDocumentType(d.fileName, documentType);
+            if (!validation.valid) {
+                warnings.push({ index: idx, fileName: d.fileName, ...validation });
+            }
+        }
+        
+        // ✅ KIỂM TRA: Nếu là file Excel → Bỏ qua OCR
+        const isExcelFile = d.storagePath && (
+            d.storagePath.endsWith('.xlsx') || 
+            d.storagePath.endsWith('.xls') ||
+            d.storagePath.toLowerCase().includes('.xlsx') ||
+            d.storagePath.toLowerCase().includes('.xls')
+        );
 
-    if (ocrPages.length === 0) {
-         failed.push({ index: idx, message: 'Thiếu ocrPages (danh sách URL ảnh OCR cho từng trang)' });
-         return;
-    }
+        let ocrPages = [];
+        
+        if (!isExcelFile) {
+            // File PDF/Image cần OCR
+            ocrPages = Array.isArray(d.ocrPages)
+                ? d.ocrPages.filter(p => p && p.ocrStoragePath)
+                : [];
 
-    docsToInsert.push({
-        fileName: d.fileName,
-        storagePath: d.storagePath,
-        documentType: d.documentType,
-        bundleId: bundle._id,
-        note: d.note || '',
-        ocrPages: ocrPages, 
-        companyId: user.companyId,
-        uploadedBy: userId,
-        status: 'PENDING_REVIEW'
+            if (ocrPages.length === 0) {
+                failed.push({ index: idx, message: 'Thiếu ocrPages (danh sách URL ảnh OCR cho từng trang)' });
+                return;
+            }
+        } else {
+            console.log(`✅ File Excel detected: ${d.fileName} - Skip OCR`);
+        }
+
+        docsToInsert.push({
+            fileName: d.fileName,
+            storagePath: d.storagePath,
+            documentType: documentType,
+            bundleId: bundle._id,
+            note: d.note || '',
+            ocrPages: ocrPages, 
+            companyId: user.companyId,
+            uploadedBy: userId,
+            status: 'PENDING_REVIEW',
+            needsGeminiDetection: needsGeminiDetection || false, // Flag để OCR job biết cần detect type
+            isExcelFile: isExcelFile // Flag để biết là Excel
+        });
     });
-});
 
 if (docsToInsert.length === 0) {
     // Xóa bundle nếu không có document hợp lệ
@@ -175,7 +230,7 @@ const inserted = await Document.insertMany(docsToInsert);
         return docObj;
     });
     
-    return { ...bundleDetail, failed };
+    return { ...bundleDetail, failed, warnings };
 }
 
 // Supplier: Cập nhật bộ chứng từ (có thể thêm/sửa/xóa file, cập nhật bundleName)
@@ -590,12 +645,22 @@ async function staffReview(staffUserId, bundleId, payload) {
         // APPROVE - update all documents to OCR_PROCESSING
         const updatePromises = [];
         docs.forEach(doc => {
+            // ✅ KIỂM TRA: Nếu là Excel file → Skip OCR
+            const isExcelFile = doc.isExcelFile || (doc.storagePath && (
+                doc.storagePath.endsWith('.xlsx') || 
+                doc.storagePath.endsWith('.xls') ||
+                doc.storagePath.toLowerCase().includes('.xlsx') ||
+                doc.storagePath.toLowerCase().includes('.xls')
+            ));
+
+            const newStatus = isExcelFile ? 'OCR_COMPLETED' : 'OCR_PROCESSING';
+
             updatePromises.push(
                 Document.findByIdAndUpdate(
                     doc._id,
                     {
                         $set: {
-                            status: 'OCR_PROCESSING',
+                            status: newStatus,
                             approvedBy: staffUserId,
                             approvedAt: new Date(),
                             updatedAt: new Date()
@@ -604,8 +669,14 @@ async function staffReview(staffUserId, bundleId, payload) {
                     { new: true, lean: true }
                 )
             );
-            // Start OCR từng document với đầy đủ danh sách ảnh
-            setImmediate(() => startOcrJob(doc._id).catch(() => {}));        });
+            
+            // Start OCR từng document (bỏ qua Excel files)
+            if (!isExcelFile) {
+                setImmediate(() => startOcrJob(doc._id).catch(() => {}));
+            } else {
+                console.log(`⏭️ Skip OCR for Excel file: ${doc.fileName}`);
+            }
+        });
         await Promise.all(updatePromises);
     } else {
         const err = new Error('Action không hợp lệ. Phải là APPROVE hoặc REJECT');
@@ -695,9 +766,42 @@ async function runOcrJob(documentId) {
         const finalOcrData = pageTexts.filter(Boolean).join('\n\n--- PAGE BREAK ---\n\n');
         if (!finalOcrData) throw new Error('No OCR text extracted from any page');
 
+        // Lấy document để check needsGeminiDetection
+        const currentDoc = await Document.findById(documentId).lean();
+        let finalDocumentType = currentDoc.documentType;
+        let geminiDetectionNote = '';
+
+        // Nếu cần Gemini detection, gọi Gemini để xác định type
+        if (currentDoc.needsGeminiDetection) {
+            try {
+                const gemini = getGeminiService();
+                const detection = await gemini.detectDocumentType(finalOcrData);
+                
+                if (detection.documentType && detection.confidence > 0.6) {
+                    finalDocumentType = detection.documentType;
+                    geminiDetectionNote = `AI phát hiện: ${detection.documentType} (độ tin cậy: ${(detection.confidence * 100).toFixed(0)}%). ${detection.reasoning}`;
+                    console.log(`[Gemini Detection] Document ${documentId}: ${finalDocumentType} (confidence: ${detection.confidence})`);
+                } else {
+                    geminiDetectionNote = `AI không thể xác định chính xác (confidence: ${(detection.confidence * 100).toFixed(0)}%). Giữ nguyên: ${finalDocumentType}`;
+                }
+            } catch (geminiError) {
+                console.error('Gemini detection failed:', geminiError);
+                geminiDetectionNote = `Lỗi AI detection: ${geminiError.message}. Giữ nguyên: ${finalDocumentType}`;
+            }
+        }
+
         const updatedDoc = await Document.findByIdAndUpdate(
             documentId,
-            { $set: { ocrResult: finalOcrData, status: 'OCR_COMPLETED', updatedAt: new Date() } },
+            { 
+                $set: { 
+                    ocrResult: finalOcrData, 
+                    documentType: finalDocumentType,
+                    status: 'OCR_COMPLETED', 
+                    updatedAt: new Date(),
+                    needsGeminiDetection: false, // Đã detect xong
+                    note: currentDoc.note ? `${currentDoc.note}\n\n${geminiDetectionNote}` : geminiDetectionNote
+                } 
+            },
             { new: true }
         );
         if (updatedDoc && updatedDoc.bundleId) {
@@ -822,6 +926,221 @@ async function staffRetryOcrForBundle(staffUserId, bundleId) {
 
     return await getBundleDetail(staffUserId, bundleId.toString(), true);
 }
+
+/**
+ * STAFF: Bổ sung thêm file vào bundle (kể cả sau khi đã duyệt)
+ * Cho phép STAFF upload thêm file và tự động OCR
+ */
+async function staffAddDocuments(staffUserId, bundleId, payload) {
+    const { documents } = payload || {};
+    
+    if (!bundleId || !mongoose.isValidObjectId(bundleId)) {
+        const err = new Error('BundleId không hợp lệ');
+        err.status = constants.HTTP_STATUS.BAD_REQUEST;
+        throw err;
+    }
+    
+    if (!Array.isArray(documents) || documents.length === 0) {
+        const err = new Error('Danh sách chứng từ trống');
+        err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+        throw err;
+    }
+
+    // Kiểm tra bundle tồn tại
+    const bundle = await Bundle.findById(bundleId);
+    if (!bundle) {
+        const err = new Error('Không tìm thấy bộ chứng từ');
+        err.status = constants.HTTP_STATUS.NOT_FOUND;
+        throw err;
+    }
+
+    // Lấy thông tin STAFF
+    const staffUser = await User.findById(staffUserId).lean();
+    if (!staffUser) {
+        const err = new Error('Không tìm thấy thông tin nhân viên');
+        err.status = constants.HTTP_STATUS.UNAUTHORIZED;
+        throw err;
+    }
+
+    // Tạo documents mới
+    const docsToInsert = [];
+    const failed = [];
+    const warnings = [];
+    
+    documents.forEach((d, idx) => {
+        if (!d || !d.fileName || !d.storagePath) {
+            failed.push({ index: idx, message: 'Thiếu fileName/storagePath' });
+            return;
+        }
+        
+        // Auto-detect document type (3 lớp)
+        let documentType = d.documentType;
+        let needsGeminiDetection = false;
+        
+        if (!documentType) {
+            // Lớp 1: Thử detect từ filename
+            documentType = detectDocumentType(d.fileName);
+            
+            if (documentType) {
+                warnings.push({ 
+                    index: idx, 
+                    fileName: d.fileName, 
+                    detectedType: documentType, 
+                    detectionMethod: 'filename',
+                    message: 'Đã tự động xác định loại chứng từ từ tên file' 
+                });
+            } else {
+                // Lớp 2: Đánh dấu cần dùng Gemini sau khi OCR
+                documentType = 'COMMERCIAL_INVOICE'; // Tạm dùng default
+                needsGeminiDetection = true;
+                warnings.push({ 
+                    index: idx, 
+                    fileName: d.fileName, 
+                    message: 'Sẽ tự động xác định loại chứng từ bằng AI sau khi OCR' 
+                });
+            }
+        } else {
+            const validation = validateDocumentType(d.fileName, documentType);
+            if (!validation.valid) {
+                warnings.push({ index: idx, fileName: d.fileName, ...validation });
+            }
+        }
+        
+        // ✅ KIỂM TRA: Nếu là file Excel → Bỏ qua OCR
+        const isExcelFile = d.storagePath && (
+            d.storagePath.endsWith('.xlsx') || 
+            d.storagePath.endsWith('.xls') ||
+            d.storagePath.toLowerCase().includes('.xlsx') ||
+            d.storagePath.toLowerCase().includes('.xls')
+        );
+
+        let status = 'OCR_PROCESSING';
+        let ocrPages = [];
+
+        if (isExcelFile) {
+            // File Excel không cần OCR
+            status = 'OCR_COMPLETED';
+            ocrPages = [];
+            console.log(`✅ File Excel detected: ${d.fileName} - Skip OCR`);
+        } else {
+            // File PDF/Image cần OCR
+            ocrPages = Array.isArray(d.ocrPages)
+                ? d.ocrPages.filter(p => p && p.ocrStoragePath)
+                : [];
+
+            if (ocrPages.length === 0) {
+                failed.push({ index: idx, message: 'Thiếu ocrPages (danh sách URL ảnh OCR cho từng trang)' });
+                return;
+            }
+        }
+
+        docsToInsert.push({
+            fileName: d.fileName,
+            storagePath: d.storagePath,
+            documentType: documentType,
+            bundleId: bundle._id,
+            note: d.note || '',
+            ocrPages: ocrPages,
+            companyId: bundle.companyId,
+            uploadedBy: staffUserId, // STAFF upload
+            status: status, // OCR_COMPLETED cho Excel, OCR_PROCESSING cho PDF/Image
+            approvedBy: staffUserId,
+            approvedAt: new Date(),
+            needsGeminiDetection: needsGeminiDetection || false,
+            isExcelFile: isExcelFile // Flag để biết là Excel
+        });
+    });
+
+    if (docsToInsert.length === 0) {
+        const err = new Error('Không có chứng từ hợp lệ để thêm');
+        err.status = constants.HTTP_STATUS.UNPROCESSABLE_ENTITY;
+        throw err;
+    }
+
+    // Insert documents
+    const inserted = await Document.insertMany(docsToInsert);
+
+    // ✅ TỰ ĐỘNG LINK DOCUMENTS MỚI VÀO LOHANG DRAFT (nếu có)
+    console.log('\n========== AUTO-LINK TO LOHANG DRAFT ==========');
+    console.log('Bundle ID:', bundle._id);
+    
+    const LohangDraftClass = require('../models/lohangDraft.model');
+    const LohangDraft = buildModelFromClass(LohangDraftClass);
+    
+    // Tìm lohangDraft có chứa bất kỳ document nào từ bundle này
+    // Lấy tất cả document IDs từ bundle (bao gồm cả documents cũ)
+    const allBundleDocIds = await Document.find({ bundleId: bundle._id })
+        .select('_id')
+        .lean()
+        .then(docs => docs.map(d => d._id));
+    
+    console.log('All documents in bundle:', allBundleDocIds.length);
+    console.log('Document IDs:', allBundleDocIds.map(id => id.toString()));
+    
+    const lohangDraft = await LohangDraft.findOne({ 
+        linkedDocuments: { $in: allBundleDocIds }
+    });
+    
+    if (lohangDraft) {
+        console.log('✅ Found lohangDraft:', lohangDraft._id);
+        console.log('Current linkedDocuments:', lohangDraft.linkedDocuments?.length || 0);
+        
+        const newDocIds = inserted.map(d => d._id);
+        console.log('New documents to link:', newDocIds.map(id => id.toString()));
+        
+        await LohangDraft.findByIdAndUpdate(lohangDraft._id, {
+            $addToSet: { linkedDocuments: { $each: newDocIds } },
+            updatedAt: new Date()
+        });
+        
+        console.log(`✅ Auto-linked ${newDocIds.length} new documents to lohangDraft ${lohangDraft._id}`);
+    } else {
+        console.log(`⚠️ No lohangDraft found for bundle ${bundle._id}`);
+        console.log('Searched with document IDs:', allBundleDocIds.map(id => id.toString()));
+        console.log('Documents not linked. Please check:');
+        console.log('1. Does lohangDraft exist for this bundle?');
+        console.log('2. Are any of these document IDs in lohangDraft.linkedDocuments?');
+    }
+    console.log('===============================================\n');
+
+    // Cập nhật bundle status nếu cần
+    if (bundle.status === 'PENDING_REVIEW') {
+        bundle.status = 'OCR_PROCESSING';
+        bundle.approvedBy = staffUserId;
+        bundle.approvedAt = new Date();
+    } else if (bundle.status === 'OCR_COMPLETED' || bundle.status === 'OCR_FAILED') {
+        // Nếu đã hoàn thành OCR, chuyển về OCR_PROCESSING vì có file mới
+        bundle.status = 'OCR_PROCESSING';
+    }
+    
+    // Thêm note vào reviewNotes
+    const reviewNote = {
+        by: new mongoose.Types.ObjectId(staffUserId),
+        byUsername: staffUser.username || '',
+        byFullName: staffUser.fullName || '',
+        byEmail: staffUser.email || '',
+        note: `Đã bổ sung ${inserted.length} chứng từ mới`,
+        action: 'ADD_DOCUMENTS',
+        createdAt: new Date()
+    };
+    bundle.reviewNotes = [...(bundle.reviewNotes || []), reviewNote];
+    bundle.updatedAt = new Date();
+    await bundle.save();
+
+    // Khởi chạy OCR cho từng document mới (bỏ qua Excel files)
+    for (const doc of inserted) {
+        if (doc.isExcelFile) {
+            console.log(`⏭️ Skip OCR for Excel file: ${doc.fileName}`);
+            continue;
+        }
+        setImmediate(() => startOcrJob(doc._id).catch(() => {}));
+    }
+
+    // Trả về bundle detail
+    const result = await getBundleDetail(staffUserId, bundleId.toString(), true);
+    return { ...result, failed, warnings, addedCount: inserted.length };
+}
+
 module.exports = {
     supplierCreate,
     supplierUpdate,
@@ -830,7 +1149,8 @@ module.exports = {
     staffList,
     staffReview,
     staffRetryOcr,
-    staffRetryOcrForBundle
+    staffRetryOcrForBundle,
+    staffAddDocuments
 };
 
 

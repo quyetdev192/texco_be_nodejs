@@ -33,11 +33,6 @@ const listUsers = asyncHandler(async (req, res) => {
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Thành công', data: result });
 });
 
-const getUser = asyncHandler(async (req, res) => {
-    const result = await userHandle.getUserById(req.params.id);
-    return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Thành công', data: result });
-});
-
 const createUser = asyncHandler(async (req, res) => {
     const { username, email, password, fullName, role, companyId } = req.body || {};
     const user = await userHandle.createUser({ username, email, password, fullName, role, companyId });
@@ -60,7 +55,6 @@ module.exports = {
     getProfile,
     updateProfile,
     listUsers,
-    getUser,
     createUser,
     updateUser,
     deleteUser
