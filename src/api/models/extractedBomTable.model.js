@@ -51,8 +51,8 @@ class ExtractedBomTable {
       
       // Danh sách SKU trong lô hàng này
       skuList: [{
-        stt: { type: String }, // STT của SKU trong Excel BOM
-        skuCode: { type: String },
+        stt: { type: String }, // STT của SKU
+        skuCode: { type: String }, // Product SKU code (5022064, 5022065...)
         productName: { type: String }
       }],
       

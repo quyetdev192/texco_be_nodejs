@@ -14,7 +14,7 @@ class GeminiService {
     console.log(`✅ Loaded ${this.apiKeys.length} Gemini API key(s) for load balancing`);
     
     this.currentKeyIndex = 0; // Round-robin index
-    this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
   }
   
   /**

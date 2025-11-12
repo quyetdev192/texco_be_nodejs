@@ -48,11 +48,69 @@ const createCO = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Lấy danh sách Form và Tiêu chí được hỗ trợ
+ * GET /api/v1/co/supported-combinations
+ */
+const getSupportedCombinations = asyncHandler(async (req, res) => {
+  const supportedCombinations = [
+    {
+      formType: 'FORM_E',
+      criterionType: 'CTH',
+      status: 'supported',
+      description: 'Form E với tiêu chí Change in Tariff Heading'
+    },
+    {
+      formType: 'FORM_E',
+      criterionType: 'CTC',
+      status: 'development',
+      description: 'Form E với tiêu chí Change in Tariff Classification (đang phát triển)'
+    },
+    {
+      formType: 'FORM_B',
+      criterionType: 'CTH',
+      status: 'development',
+      description: 'Form B với tiêu chí Change in Tariff Heading (đang phát triển)'
+    },
+    {
+      formType: 'FORM_B',
+      criterionType: 'CTC',
+      status: 'development',
+      description: 'Form B với tiêu chí Change in Tariff Classification (đang phát triển)'
+    }
+  ];
+
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    message: 'Danh sách Form và Tiêu chí được hỗ trợ',
+    data: {
+      supportedCombinations,
+      currentlySupported: supportedCombinations.filter(c => c.status === 'supported'),
+      inDevelopment: supportedCombinations.filter(c => c.status === 'development')
+    }
+  });
+});
+
+/**
  * Setup Form E/B và Tiêu chí
  * PUT /api/v1/co/lohang/:lohangDraftId/setup
  */
 const setupFormAndCriteria = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
+  const { formType, criterionType } = req.body;
+  
+  // Validation: Chỉ hỗ trợ FORM_E + CTH
+  if (formType !== 'FORM_E' || criterionType !== 'CTH') {
+    return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      errorCode: 1,
+      message: `Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`,
+      supportedCombinations: [
+        { formType: 'FORM_E', criterionType: 'CTH', status: 'supported' }
+      ]
+    });
+  }
+  
   const result = await coProcessHandle.setupFormAndCriteria(lohangDraftId, req.body);
   return res.status(constants.HTTP_STATUS.OK).json({
     success: true,
@@ -238,14 +296,16 @@ const reExtractTable = async (req, res) => {
 };
 
 /**
- * Continue to next step
+ * Continue to next step - TỔNG HỢP TẤT CẢ
  * POST /api/v1/co/lohang/:id/continue
+ * Body: { formType, exchangeRate, criterionType, tables } (tùy bước)
  */
 const continueToNextStep = async (req, res) => {
   try {
     const { id } = req.params;
+    const payload = req.body; // Nhận data từ FE
     
-    const result = await coProcessHandle.continueToNextStep(id);
+    const result = await coProcessHandle.continueToNextStep(id, payload);
     
     res.status(constants.HTTP_STATUS.OK).json({
       success: true,
@@ -267,11 +327,22 @@ const continueToNextStep = async (req, res) => {
 const setupAndExtract = async (req, res) => {
   try {
     const { id } = req.params;
-    const { formType, exchangeRate, criterionType } = req.body;
+    const { formType, criterionType } = req.body;
+    
+    // Validation: Chỉ hỗ trợ FORM_E + CTH
+    if (formType !== 'FORM_E' || criterionType !== 'CTH') {
+      return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        errorCode: 1,
+        message: `Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`,
+        supportedCombinations: [
+          { formType: 'FORM_E', criterionType: 'CTH', status: 'supported' }
+        ]
+      });
+    }
     
     const result = await coProcessHandle.setupAndExtract(id, {
       formType,
-      exchangeRate,
       criterionType
     });
     
@@ -288,16 +359,34 @@ const setupAndExtract = async (req, res) => {
   }
 };
 
+/**
+ * Tính toán tiêu hao và phân bổ FIFO (Bước 4)
+ * POST /api/v1/co/lohang/:lohangDraftId/calculate-consumption
+ */
+const calculateConsumption = asyncHandler(async (req, res) => {
+  const { lohangDraftId } = req.params;
+  const result = await coProcessHandle.calculateConsumptionAndFifo(lohangDraftId);
+  
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: result.success,
+    errorCode: result.success ? 0 : 1,
+    message: result.message,
+    data: result
+  });
+});
+
 module.exports = {
   getLohangDetail,
   listCO,
   createCO,
+  getSupportedCombinations,
   setupFormAndCriteria,
   continueToNextStep,
   setupAndExtract,
   triggerExtractTables,
   retryExtraction,
   reExtractTable,
+  calculateConsumption,
   updateDocument,
   deleteDocument
 };

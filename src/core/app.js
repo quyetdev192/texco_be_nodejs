@@ -65,6 +65,10 @@ class App {
     }
 
     setupRoutes() {
+        // Serve static files cho CTC reports
+        const path = require('path');
+        this.app.use('/reports', express.static(path.join(__dirname, '../../reports')));
+        
         this.app.use('/api', apiRoutes);
         this.app.get('/', (_, res) => res.json({ message: 'Welcome to API Server' }));
     }

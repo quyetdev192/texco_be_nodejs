@@ -23,8 +23,9 @@ class ExtractedProductTable {
       // Dữ liệu bảng
       products: [{
         stt: { type: Number },
-        skuCode: { type: String }, // Mã SP
-        productName: { type: String }, // Tên sản phẩm (Mô tả)
+        skuCode: { type: String }, // Mã SP (VD: 5022064, 5022065)
+        modelName: { type: String }, // Mô tả tiếng Anh (VD: 24"x18"x34" vanity with ceramic vanity top...)
+        productName: { type: String }, // Tên hàng tiếng Việt (VD: Tủ phòng tắm (5022064),Qc:(610x465x866)mm...)
         hsCode: { type: String }, // HS Code
         quantity: { type: Number }, // QTY (Số lượng)
         unit: { type: String }, // Đơn vị

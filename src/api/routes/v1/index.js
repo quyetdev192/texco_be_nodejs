@@ -5,6 +5,7 @@ const { verifyToken, requireRole } = require('../../../core/middlewares/auth.mid
 const documentController = require('../../controllers/document.controller');
 const coProcessController = require('../../controllers/coProcess.controller');
 const extractedTablesController = require('../../controllers/extractedTables.controller');
+const calculationController = require('../../controllers/calculation.controller');
 
 router.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', version: 'v1' });
@@ -56,6 +57,9 @@ router.post('/co/lohang/:id/continue',
   coProcessController.continueToNextStep
 );
 
+// BƯỚC 2: Lấy danh sách Form và Tiêu chí được hỗ trợ
+router.get('/co/supported-combinations', verifyToken, requireRole('STAFF'), coProcessController.getSupportedCombinations);
+
 // BƯỚC 3: Chọn Form và Tiêu chí
 router.put('/co/lohang/:lohangDraftId/setup', verifyToken, requireRole('STAFF'), coProcessController.setupFormAndCriteria);
 
@@ -87,6 +91,27 @@ router.post('/co/lohang/:id/re-extract-table',
   coProcessController.reExtractTable
 );
 
+// BƯỚC 4: Tính toán tiêu hao và phân bổ FIFO
+router.post('/co/lohang/:lohangDraftId/calculate-consumption',
+  verifyToken,
+  requireRole('STAFF'),
+  coProcessController.calculateConsumption
+);
+
+// Lấy bảng Tiêu hao (Consumption Table)
+router.get('/co/lohang/:lohangDraftId/consumption',
+  verifyToken,
+  requireRole('STAFF'),
+  calculationController.getConsumptionTable
+);
+
+// Lấy bảng Phân bổ FIFO (Allocation Table)
+router.get('/co/lohang/:lohangDraftId/allocations',
+  verifyToken,
+  requireRole('STAFF'),
+  calculationController.getAllocationTable
+);
+
 // Lấy chi tiết lô hàng (dùng cho nút "Tiếp tục")
 router.get('/co/lohang/:lohangDraftId', verifyToken, requireRole('STAFF'), coProcessController.getLohangDetail);
 
@@ -106,5 +131,50 @@ router.put('/co/lohang/:lohangDraftId/tables/bom/:bomIndex', verifyToken, requir
 
 // Xác nhận tất cả bảng
 router.put('/co/lohang/:lohangDraftId/tables/confirm', verifyToken, requireRole('STAFF'), extractedTablesController.confirmAllTables);
+
+// ===== CTC REPORTS APIs - Bảng kê CTC =====
+const ctcReportController = require('../../controllers/ctcReport.controller');
+
+// Tạo bảng kê CTC cho tất cả SKU
+router.post('/co/lohang/:lohangDraftId/ctc-reports', 
+  verifyToken, 
+  requireRole('STAFF'), 
+  ctcReportController.generateCTCReports
+);
+
+// Retry tạo bảng kê CTC (khi có lỗi ở bước 4)
+router.post('/co/lohang/:lohangDraftId/ctc-reports/retry', 
+  verifyToken, 
+  requireRole('STAFF'), 
+  ctcReportController.retryCTCReports
+);
+
+// Lấy danh sách bảng kê CTC đã tạo
+router.get('/co/lohang/:lohangDraftId/ctc-reports', 
+  verifyToken, 
+  requireRole('STAFF'), 
+  ctcReportController.getCTCReports
+);
+
+// Xóa bảng kê CTC của một SKU
+router.delete('/co/lohang/:lohangDraftId/ctc-reports/:skuCode', 
+  verifyToken, 
+  requireRole('STAFF'), 
+  ctcReportController.deleteCTCReport
+);
+
+// Xác nhận hoàn thành hồ sơ C/O
+router.post('/co/lohang/:lohangDraftId/complete', 
+  verifyToken, 
+  requireRole('STAFF'), 
+  ctcReportController.completeCOProcess
+);
+
+// Quay lại step trước để chỉnh sửa
+router.post('/co/lohang/:lohangDraftId/back-to-step/:stepNumber', 
+  verifyToken, 
+  requireRole('STAFF'), 
+  ctcReportController.backToStep
+);
 
 module.exports = router;
