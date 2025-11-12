@@ -174,39 +174,20 @@ async function updateNplInTable(lohangDraftId, nplIndex, updatedNpl, userId) {
     throw err;
   }
 
-  const oldNpl = table.materials[index];
-  const editedFields = [];
-
-  // So sánh và ghi lại các field đã sửa
+  // Cập nhật NPL - chỉ cho phép sửa 5 cột: nplCode, invoiceNo, invoiceDate, quantity, origin
+  const allowedFields = ['nplCode', 'invoiceNo', 'invoiceDate', 'quantity', 'origin'];
+  const filteredUpdate = {};
+  
   Object.keys(updatedNpl).forEach(key => {
-    if (oldNpl[key] !== updatedNpl[key]) {
-      editedFields.push(key);
-      
-      if (!table.materials[index].editHistory) {
-        table.materials[index].editHistory = [];
-      }
-      
-      table.materials[index].editHistory.push({
-        editedAt: new Date(),
-        editedBy: userId,
-        fieldName: key,
-        oldValue: String(oldNpl[key]),
-        newValue: String(updatedNpl[key])
-      });
+    if (allowedFields.includes(key)) {
+      filteredUpdate[key] = updatedNpl[key];
     }
   });
-
-  // Cập nhật NPL
-  Object.assign(table.materials[index], updatedNpl);
-  table.materials[index].isEdited = true;
-  table.materials[index].editedFields = [...new Set([...(table.materials[index].editedFields || []), ...editedFields])];
+  
+  Object.assign(table.materials[index], filteredUpdate);
   
   table.status = 'EDITED';
   table.updatedAt = new Date();
-
-  // Tính lại tổng
-  table.totalQuantity = table.materials.reduce((sum, m) => sum + (m.quantityImported || 0), 0);
-  table.totalValueVnd = table.materials.reduce((sum, m) => sum + (m.totalValueVnd || 0), 0);
 
   await table.save();
 
