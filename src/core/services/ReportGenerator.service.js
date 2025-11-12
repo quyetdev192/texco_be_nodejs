@@ -342,8 +342,10 @@ class ReportGeneratorService {
     // Tính tỷ lệ CTC (%)
     const ctcPercentage = fobValueUsd > 0 ? (fobExcludingChina / fobValueUsd) * 100 : 0;
     
-    // Kết luận đạt tiêu chí CTC hay không (≥ 40%)
-    const conclusion = ctcPercentage >= 40 ? 'ĐẠT TIÊU CHÍ CTC' : 'KHÔNG ĐẠT TIÊU CHÍ CTC';
+    // Kết luận đạt tiêu chí hay không (≥ 40%)
+    // Sử dụng criterionType từ lohangDraft để hiển thị đúng tiêu chí
+    const criterionType = lohangDraft.criterionType || 'CTC';
+    const conclusion = ctcPercentage >= 40 ? `ĐẠT TIÊU CHÍ ${criterionType}` : `KHÔNG ĐẠT TIÊU CHÍ ${criterionType}`;
 
     return {
       product,
