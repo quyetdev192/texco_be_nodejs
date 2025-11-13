@@ -15,7 +15,7 @@ class Document {
                 required: true,
                 enum: [
                     "VAT_INVOICE", "IMPORT_DECLARATION", "PURCHASE_LIST", "NPL_ORIGIN_CERT",
-                    "EXPORT_DECLARATION", "COMMERCIAL_INVOICE", "BILL_OF_LADING", "BOM"
+                    "EXPORT_DECLARATION", "COMMERCIAL_INVOICE", "BILL_OF_LADING", "BOM", "OTHER"
                 ]
             },
             note: { type: String, default: '' }, // Ghi chú của NCC khi upload
@@ -28,8 +28,9 @@ class Document {
             // Trường cũ để tương thích ngược (nếu FE chỉ gửi 1 ảnh)
             base64Content: { type: String },
             mimeType: { type: String },
-            // Liên kết với bộ chứng từ
+            // Liên kết với bộ chứng từ và hồ sơ C/O
             bundleId: { type: Schema.Types.ObjectId, ref: 'Bundle', required: true },
+            coApplicationId: { type: Schema.Types.ObjectId, ref: 'CoApplication' }, // Liên kết với hồ sơ C/O (nếu có)
             status: {
                 type: String,
                 required: true,

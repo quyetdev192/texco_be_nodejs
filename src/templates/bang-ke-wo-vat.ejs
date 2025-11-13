@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng kê WO (Có VAT)</title>
+    <style>
+        /* (Dùng chung CSS với mẫu CTC) */
+        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid black; padding: 5px; text-align: center; }
+        .header { text-align: center; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h4>PHỤ LỤC III</h4>
+        <h4>BẢNG KÊ KHAI HÀNG HÓA XUẤT KHẨU ĐẠT TIÊU CHÍ "WO"</h4>
+        <p>(sử dụng nguyên liệu thu mua trong nước, có hóa đơn giá trị gia tăng)</p>
+    </div>
+
+    <p><strong>Tên hàng hóa:</strong> <%= coApp.items[0].productName %></p>
+    <p><strong>Mã HS của hàng hóa (6 số):</strong> <%= coApp.items[0].productHsCode %></p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Tên nguyên liệu</th>
+                <th>Mã HS</th>
+                <th>Nơi khai thác/... tại Việt Nam</th>
+                <th>Tổng trị giá</th>
+                <th colspan="2">Nhà sản xuất/cung cấp</th>
+                <th colspan="2">Hóa đơn giá trị gia tăng</th>
+            </tr>
+            <tr>
+                <th colspan="5"></th>
+                <th>Tên</th>
+                <th>Địa chỉ</th>
+                <th>Số</th>
+                <th>Ngày</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% coApp.items[0].materialsBreakdown.forEach((npl, index) => { %>
+                <tr>
+                    <td><%= index + 1 %></td>
+                    <td><%= npl.name %></td>
+                    <td><%= npl.hsCode %></td>
+                    <td><%= npl.originLocation %></td>
+                    <td><%= npl.value.toFixed(2) %></td>
+                    <td><%= npl.supplierName %></td>
+                    <td><%= npl.supplierAddress %></td>
+                    <td><%= npl.sourceRef %></td>
+                    <td><%= npl.sourceDate.toLocaleDateString('vi-VN') %></td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+    <p><strong>Kết luận:</strong> Hàng hóa đáp ứng tiêu chí "WO".</p>
+</body>
+</html>

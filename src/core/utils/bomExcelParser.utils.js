@@ -41,7 +41,11 @@ class BomExcelParser {
       const rawData = XLSX.utils.sheet_to_json(sheet, { 
         header: 1, // Lấy dạng array of arrays
         defval: null, // Default value cho cell rỗng
+<<<<<<< HEAD
         raw: false // Convert số sang string để xử lý dễ hơn
+=======
+        raw: true // Giữ nguyên giá trị số để bảo toàn độ chính xác thập phân
+>>>>>>> quyetdev
       });
 
       console.log('Total rows:', rawData.length);
@@ -213,6 +217,7 @@ class BomExcelParser {
   }
 
   /**
+<<<<<<< HEAD
    * Lấy giá trị cell
    * @param {Array} row - Row data
    * @param {number} index - Column index
@@ -229,17 +234,94 @@ class BomExcelParser {
    * Parse string sang number
    * @param {string} value - String value
    * @returns {number} Number value
+=======
+   * Lấy giá trị cell (giữ nguyên type để bảo toàn độ chính xác số)
+   * @param {Array} row - Row data
+   * @param {number} index - Column index
+   * @returns {any} Cell value (giữ nguyên type)
+   */
+  getCellValue(row, index) {
+    if (index === -1 || !row || row[index] === undefined || row[index] === null) {
+      return '';
+    }
+    
+    const value = row[index];
+    
+    // Nếu là số, giữ nguyên để bảo toàn độ chính xác
+    if (typeof value === 'number') {
+      return value;
+    }
+    
+    // Nếu là string, trim và return
+    return value.toString().trim();
+  }
+
+  /**
+   * Parse string sang number với độ chính xác cao
+   * @param {string} value - String value
+   * @returns {number} Number value (giữ nguyên độ chính xác thập phân)
+>>>>>>> quyetdev
    */
   parseNumber(value) {
     if (!value || value === '') {
       return 0;
     }
 
+<<<<<<< HEAD
     // Remove commas và spaces
     const cleaned = value.toString().replace(/,/g, '').replace(/\s/g, '');
     const number = parseFloat(cleaned);
 
     return isNaN(number) ? 0 : number;
+=======
+    // Nếu đã là số, trả về ngay để bảo toàn độ chính xác
+    if (typeof value === 'number') {
+      return isNaN(value) || !isFinite(value) ? 0 : value;
+    }
+
+    // Remove commas và spaces, giữ nguyên dấu chấm thập phân
+    const cleaned = value.toString().replace(/,/g, '').replace(/\s/g, '');
+    
+    // Sử dụng Number() thay vì parseFloat() để giữ độ chính xác cao hơn
+    const number = Number(cleaned);
+
+    // Kiểm tra nếu là số hợp lệ
+    if (isNaN(number) || !isFinite(number)) {
+      return 0;
+    }
+
+    // Giữ nguyên số thập phân, không làm tròn
+    return number;
+  }
+
+  /**
+   * Tạo mapping thông minh giữa BOM SKU codes và Product SKU codes
+   * @param {Array} bomSkuList - SKU list từ BOM Excel (E-31, C-31, D-24...)
+   * @param {Array} productSkuList - SKU list từ Product Table (5022064, 5022065...)
+   * @returns {Object} Mapping object { bomSku: productSku }
+   */
+  createSkuMapping(bomSkuList, productSkuList) {
+    const mapping = {};
+    
+    // Sắp xếp theo thứ tự STT để mapping 1-1
+    const sortedBomSkus = bomSkuList.sort((a, b) => parseInt(a.stt) - parseInt(b.stt));
+    const sortedProductSkus = productSkuList.sort((a, b) => a.stt - b.stt);
+    
+    console.log('Creating SKU mapping:');
+    console.log('BOM SKUs:', sortedBomSkus.map(s => `${s.stt}:${s.skuCode}`));
+    console.log('Product SKUs:', sortedProductSkus.map(s => `${s.stt}:${s.skuCode}`));
+    
+    // Mapping theo thứ tự STT
+    for (let i = 0; i < Math.min(sortedBomSkus.length, sortedProductSkus.length); i++) {
+      const bomSku = sortedBomSkus[i].skuCode;
+      const productSku = sortedProductSkus[i].skuCode;
+      mapping[bomSku] = productSku;
+      
+      console.log(`Mapping: ${bomSku} → ${productSku}`);
+    }
+    
+    return mapping;
+>>>>>>> quyetdev
   }
 
   /**
@@ -249,12 +331,28 @@ class BomExcelParser {
    * @returns {Object} Transformed BOM data
    */
   transformToBomTable(parsedData, skuListFromProductTable) {
+<<<<<<< HEAD
     const bomData = parsedData.materials.map((material, index) => {
       // Convert normPerSku object sang Map
       const normPerSkuMap = new Map();
       
       for (const [skuCode, norm] of Object.entries(material.normPerSku)) {
         normPerSkuMap.set(skuCode, norm);
+=======
+    // Tạo mapping thông minh giữa BOM SKU và Product SKU
+    const bomToProductMapping = this.createSkuMapping(parsedData.skuList, skuListFromProductTable);
+    
+    const bomData = parsedData.materials.map((material, index) => {
+      // Convert normPerSku từ BOM SKU sang Product SKU
+      const normPerSkuMap = new Map();
+      
+      for (const [bomSkuCode, norm] of Object.entries(material.normPerSku)) {
+        // Convert BOM SKU (E-31) sang Product SKU (5022064)
+        const productSkuCode = bomToProductMapping[bomSkuCode];
+        if (productSkuCode) {
+          normPerSkuMap.set(productSkuCode, norm);
+        }
+>>>>>>> quyetdev
       }
 
       return {
@@ -263,13 +361,18 @@ class BomExcelParser {
         nplName: material.nplName,
         hsCode: material.hsCode,
         unit: material.unit,
+<<<<<<< HEAD
         normPerSku: normPerSkuMap,
+=======
+        normPerSku: normPerSkuMap, // Giờ đây chứa Product SKU codes
+>>>>>>> quyetdev
         isEdited: false,
         editedFields: [],
         editHistory: []
       };
     });
 
+<<<<<<< HEAD
     // Merge SKU list từ Excel BOM với Product Table
     // Excel BOM có: { stt, skuCode }
     // Product Table có: { skuCode, productName }
@@ -281,6 +384,14 @@ class BomExcelParser {
         productName: productSku ? productSku.productName : ''
       };
     });
+=======
+    // SKU list chỉ chứa Product SKU codes
+    const mergedSkuList = skuListFromProductTable.map(productSku => ({
+      stt: productSku.stt,
+      skuCode: productSku.skuCode, // Chỉ Product SKU code (5022064, 5022065...)
+      productName: productSku.productName
+    }));
+>>>>>>> quyetdev
 
     return {
       bomData: bomData,

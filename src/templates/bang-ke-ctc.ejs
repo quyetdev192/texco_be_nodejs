@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng kê CTC</title>
+    <style>
+        body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid black; padding: 5px; text-align: center; }
+        .header { text-align: center; font-weight: bold; }
+        .info { margin-bottom: 10px; }
+        .left { float: left; width: 60%; }
+        .right { float: right; width: 40%; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h4>PHỤ LỤC V</h4>
+        <h4>BẢNG KÊ KHAI HÀNG HÓA XUẤT KHẨU ĐẠT TIÊU CHÍ "CTC"</h4>
+    </div>
+
+    <div class="info">
+        <div class="left">
+            <p><strong>Tên Thương nhân:</strong> <%= coApp.exporterName %></p>
+            <p><strong>Mã số thuế:</strong> <%= coApp.taxCode %></p>
+            <p><strong>Tờ khai hải quan xuất khẩu số:</strong> <%= coApp.exportDeclarationNo %></p>
+        </div>
+        <div class="right">
+            <p><strong>Tiêu chí áp dụng:</strong> <%= coApp.items[0].originCriterionDisplay %></p>
+            <p><strong>Tên hàng hóa:</strong> <%= coApp.items[0].productName %></p>
+            <p><strong>Mã HS của hàng hóa (6 số):</strong> <%= coApp.items[0].productHsCode %></p>
+            <p><strong>Trị giá (FOB):</strong> <%= coApp.items[0].fobValue.toFixed(2) %> USD</p>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>STT</th>
+                <th>Tên nguyên liệu</th>
+                <th>Mã HS</th>
+                <th colspan="2">Trị giá (USD)</th>
+                <th>Nước xuất xứ</th>
+                <th colspan="2">Tờ khai HQNK / Hóa đơn VAT</th>
+            </tr>
+            <tr>
+                <th colspan="3"></th>
+                <th>Có xuất xứ</th>
+                <th>Không có XX</th>
+                <th></th>
+                <th>Số</th>
+                <th>Ngày</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% coApp.items[0].materialsBreakdown.forEach((npl, index) => { %>
+                <tr>
+                    <td><%= index + 1 %></td>
+                    <td><%= npl.name %></td>
+                    <td><%= npl.hsCode %></td>
+                    <td><%= npl.isOriginating ? npl.value.toFixed(2) : '' %></td>
+                    <td><%= !npl.isOriginating ? npl.value.toFixed(2) : '' %></td>
+                    <td><%= npl.originCountry %></td>
+                    <td><%= npl.sourceRef %></td>
+                    <td><%= npl.sourceDate.toLocaleDateString('vi-VN') %></td>
+                </tr>
+            <% }) %>
+            <tr>
+                <td colspan="3"><strong>Cộng</strong></td>
+                <td><strong><%= coApp.items[0].totalValueOriginating.toFixed(2) %></strong></td>
+                <td><strong><%= coApp.items[0].totalValueNonOriginating.toFixed(2) %></strong></td>
+                <td colspan="3"></td>
+            </tr>
+        </tbody>
+    </table>
+    <p><strong>Kết luận:</strong> Hàng hóa đáp ứng tiêu chí <%= coApp.items[0].originCriterionDisplay %>.</p>
+</body>
+</html>

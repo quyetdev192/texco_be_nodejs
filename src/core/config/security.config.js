@@ -114,6 +114,18 @@ class SecurityConfig {
     }
 
     getCorsConfig() {
+        // Default allowlist with frontend URLs
+        const defaultAllowlist = [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3001',
+            'https://texco-web-dashboard.vercel.app',
+            'https://texco-web-dashboard-staging.vercel.app',
+            'https://devphanmem.site',
+            'http://devphanmem.site'
+        ];
+
         const rawOrigin = process.env.CORS_ORIGIN || '*';
 
         // If wildcard, mirror request origin (works with credentials)
@@ -122,7 +134,8 @@ class SecurityConfig {
         }
 
         // Support comma-separated allowlist: "http://a.com,http://b.com"
-        const allowlist = rawOrigin.split(',').map(o => o.trim()).filter(Boolean);
+        const envAllowlist = rawOrigin.split(',').map(o => o.trim()).filter(Boolean);
+        const allowlist = [...defaultAllowlist, ...envAllowlist];
 
         const isProd = this.isProduction();
 
@@ -136,6 +149,7 @@ class SecurityConfig {
                     return callback(null, true);
                 }
                 if (allowlist.includes(origin)) return callback(null, true);
+                console.warn(`⚠️ CORS blocked request from origin: ${origin}`);
                 return callback(new Error('Not allowed by CORS'));
             }
         };

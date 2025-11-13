@@ -1,7 +1,10 @@
 const { asyncHandler } = require('../../core/middlewares/error.middleware');
 const constants = require('../../core/utils/constants');
 const coProcessHandle = require('../handles/coProcess.handle');
+<<<<<<< HEAD
 const { getExcelService } = require('../../core/utils/excel.utils');
+=======
+>>>>>>> quyetdev
 
 
 /**
@@ -49,11 +52,75 @@ const createCO = asyncHandler(async (req, res) => {
 });
 
 /**
+<<<<<<< HEAD
+=======
+ * Lấy danh sách Form và Tiêu chí được hỗ trợ
+ * GET /api/v1/co/supported-combinations
+ */
+const getSupportedCombinations = asyncHandler(async (req, res) => {
+  const supportedCombinations = [
+    {
+      formType: 'FORM_E',
+      criterionType: 'CTH',
+      status: 'supported',
+      description: 'Form E với tiêu chí Change in Tariff Heading'
+    },
+    {
+      formType: 'FORM_E',
+      criterionType: 'CTC',
+      status: 'development',
+      description: 'Form E với tiêu chí Change in Tariff Classification (đang phát triển)'
+    },
+    {
+      formType: 'FORM_B',
+      criterionType: 'CTH',
+      status: 'development',
+      description: 'Form B với tiêu chí Change in Tariff Heading (đang phát triển)'
+    },
+    {
+      formType: 'FORM_B',
+      criterionType: 'CTC',
+      status: 'development',
+      description: 'Form B với tiêu chí Change in Tariff Classification (đang phát triển)'
+    }
+  ];
+
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    message: 'Danh sách Form và Tiêu chí được hỗ trợ',
+    data: {
+      supportedCombinations,
+      currentlySupported: supportedCombinations.filter(c => c.status === 'supported'),
+      inDevelopment: supportedCombinations.filter(c => c.status === 'development')
+    }
+  });
+});
+
+/**
+>>>>>>> quyetdev
  * Setup Form E/B và Tiêu chí
  * PUT /api/v1/co/lohang/:lohangDraftId/setup
  */
 const setupFormAndCriteria = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
+<<<<<<< HEAD
+=======
+  const { formType, criterionType } = req.body;
+  
+  // Validation: Chỉ hỗ trợ FORM_E + CTH
+  if (formType !== 'FORM_E' || criterionType !== 'CTH') {
+    return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
+      success: false,
+      errorCode: 1,
+      message: `Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`,
+      supportedCombinations: [
+        { formType: 'FORM_E', criterionType: 'CTH', status: 'supported' }
+      ]
+    });
+  }
+  
+>>>>>>> quyetdev
   const result = await coProcessHandle.setupFormAndCriteria(lohangDraftId, req.body);
   return res.status(constants.HTTP_STATUS.OK).json({
     success: true,
@@ -239,14 +306,26 @@ const reExtractTable = async (req, res) => {
 };
 
 /**
+<<<<<<< HEAD
  * Continue to next step
  * POST /api/v1/co/lohang/:id/continue
+=======
+ * Continue to next step - TỔNG HỢP TẤT CẢ
+ * POST /api/v1/co/lohang/:id/continue
+ * Body: { formType, exchangeRate, criterionType, tables } (tùy bước)
+>>>>>>> quyetdev
  */
 const continueToNextStep = async (req, res) => {
   try {
     const { id } = req.params;
+<<<<<<< HEAD
     
     const result = await coProcessHandle.continueToNextStep(id);
+=======
+    const payload = req.body; // Nhận data từ FE
+    
+    const result = await coProcessHandle.continueToNextStep(id, payload);
+>>>>>>> quyetdev
     
     res.status(constants.HTTP_STATUS.OK).json({
       success: true,
@@ -268,11 +347,30 @@ const continueToNextStep = async (req, res) => {
 const setupAndExtract = async (req, res) => {
   try {
     const { id } = req.params;
+<<<<<<< HEAD
     const { formType, exchangeRate, criterionType } = req.body;
     
     const result = await coProcessHandle.setupAndExtract(id, {
       formType,
       exchangeRate,
+=======
+    const { formType, criterionType } = req.body;
+    
+    // Validation: Chỉ hỗ trợ FORM_E + CTH
+    if (formType !== 'FORM_E' || criterionType !== 'CTH') {
+      return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        errorCode: 1,
+        message: `Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`,
+        supportedCombinations: [
+          { formType: 'FORM_E', criterionType: 'CTH', status: 'supported' }
+        ]
+      });
+    }
+    
+    const result = await coProcessHandle.setupAndExtract(id, {
+      formType,
+>>>>>>> quyetdev
       criterionType
     });
     
@@ -289,16 +387,43 @@ const setupAndExtract = async (req, res) => {
   }
 };
 
+<<<<<<< HEAD
+=======
+/**
+ * Tính toán tiêu hao và phân bổ FIFO (Bước 4)
+ * POST /api/v1/co/lohang/:lohangDraftId/calculate-consumption
+ */
+const calculateConsumption = asyncHandler(async (req, res) => {
+  const { lohangDraftId } = req.params;
+  const result = await coProcessHandle.calculateConsumptionAndFifo(lohangDraftId);
+  
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: result.success,
+    errorCode: result.success ? 0 : 1,
+    message: result.message,
+    data: result
+  });
+});
+
+>>>>>>> quyetdev
 module.exports = {
   getLohangDetail,
   listCO,
   createCO,
+<<<<<<< HEAD
+=======
+  getSupportedCombinations,
+>>>>>>> quyetdev
   setupFormAndCriteria,
   continueToNextStep,
   setupAndExtract,
   triggerExtractTables,
   retryExtraction,
   reExtractTable,
+<<<<<<< HEAD
+=======
+  calculateConsumption,
+>>>>>>> quyetdev
   updateDocument,
   deleteDocument
 };

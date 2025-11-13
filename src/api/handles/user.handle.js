@@ -93,11 +93,11 @@ async function createUser(payload) {
 }
 
 async function ensureAdminSeed() {
-    const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@texco.local';
-    const adminUsername = process.env.SEED_ADMIN_USERNAME || 'admin';
-    const adminName = process.env.SEED_ADMIN_NAME || 'System Administrator';
-    const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'Admin@12345';
-    const adminRole = 'STAFF';
+    const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin.texco@texco.local';
+    const adminUsername = process.env.SEED_ADMIN_USERNAME || 'admin.texco';
+    const adminName = process.env.SEED_ADMIN_NAME || 'Texco Administrator';
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'Texco123456@';
+    const adminRole = 'ADMIN';
 
     const exists = await User.findOne({ $or: [ { email: adminEmail.toLowerCase() }, { username: adminUsername.toLowerCase() } ] }).lean();
     if (exists) return { seeded: false, username: exists.username, email: exists.email };

@@ -13,7 +13,11 @@ class LohangDraft {
       // Trạng thái xử lý
       status: {
         type: String,
+<<<<<<< HEAD
         enum: ['DRAFT', 'DATA_EXTRACTING', 'EXTRACTION_FAILED', 'SETUP_COMPLETED', 'DATA_CONFIRMED', 'CALCULATING', 'COMPLETED', 'FAILED'],
+=======
+        enum: ['DRAFT', 'DATA_EXTRACTING', 'EXTRACTION_FAILED', 'SETUP_COMPLETED', 'DATA_CONFIRMED', 'CALCULATING', 'CALCULATED_WITH_WARNINGS', 'CALCULATION_FAILED', 'REPORTS_GENERATED', 'COMPLETED', 'FAILED'],
+>>>>>>> quyetdev
         default: 'DRAFT',
         index: true
       },
@@ -41,6 +45,7 @@ class LohangDraft {
           completedAt: { type: Date },
           inProgress: { type: Boolean, default: false }
         },
+<<<<<<< HEAD
         step4_reviewTables: { 
           completed: { type: Boolean, default: false },
           completedAt: { type: Date }
@@ -59,6 +64,26 @@ class LohangDraft {
           completedAt: { type: Date }
         },
         step8_exportCO: { 
+=======
+        step4_calculate: { 
+          completed: { type: Boolean, default: false },
+          completedAt: { type: Date },
+          inProgress: { type: Boolean, default: false },
+          errors: [{ type: String }],
+          warnings: [{ type: String }]
+        },
+        step5_generateReports: { 
+          completed: { type: Boolean, default: false },
+          completedAt: { type: Date },
+          inProgress: { type: Boolean, default: false },
+          errors: [{ type: String }]
+        },
+        step6_reviewResults: { 
+          completed: { type: Boolean, default: false },
+          completedAt: { type: Date }
+        },
+        step7_exportCO: { 
+>>>>>>> quyetdev
           completed: { type: Boolean, default: false },
           completedAt: { type: Date }
         }
@@ -80,8 +105,12 @@ class LohangDraft {
       
       // Cấu hình (User sẽ điền ở bước 2)
       formType: { type: String, enum: ['FORM_E', 'FORM_B'] },
+<<<<<<< HEAD
       exchangeRate: { type: Number }, // Tỷ giá USD/VND
       criterionType: { type: String, enum: ['CTC', 'CTSH', 'RVC40', 'RVC50', 'WO', 'PE'] },
+=======
+      criterionType: { type: String, enum: ['CTC', 'CTH', 'CTSH', 'RVC40', 'RVC50', 'WO', 'PE'] },
+>>>>>>> quyetdev
       
       // Liên kết chứng từ gốc
       linkedDocuments: [{ type: Schema.Types.ObjectId, ref: 'Document' }],
@@ -90,6 +119,22 @@ class LohangDraft {
       totalSkuCount: { type: Number, default: 0 },
       processedSkuCount: { type: Number, default: 0 },
       
+<<<<<<< HEAD
+=======
+      // CTC Reports (Bảng kê CTC cho từng SKU)
+      ctcReports: [{
+        skuCode: { type: String, required: true },
+        productName: { type: String },
+        excelUrl: { type: String, required: true },
+        publicId: { type: String }, // Cloudinary public ID
+        conclusion: { type: String }, // ĐẠT/KHÔNG ĐẠT tiêu chí CTC
+        totalNPLValue: { type: Number },
+        fobExcludingChina: { type: Number },
+        ctcPercentage: { type: Number },
+        createdAt: { type: Date, default: Date.now }
+      }],
+      
+>>>>>>> quyetdev
       createdAt: { type: Date, default: Date.now },
       updatedAt: { type: Date, default: Date.now },
       confirmedAt: { type: Date },

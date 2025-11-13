@@ -51,30 +51,55 @@ const Company = buildModelFromClass(CompanyModelClass);
 async function updateBundleStatusFromDocuments(bundleId) {
     if (!bundleId) return;
     
-    const documents = await Document.find({ bundleId }).select('status').lean();
+    const documents = await Document.find({ bundleId }).select('status ocrPages').lean();
     if (!documents || documents.length === 0) return;
 
-    const statuses = documents.map(d => d.status);
-    const uniqueStatuses = [...new Set(statuses)];
-    
+    // Classify documents by their OCR capability and status
+    let hasRejected = false;
+    let hasProcessing = false;
+    let hasPending = false;
+    let allCompleted = true;
+
+    for (const doc of documents) {
+        const hasOcrPages = Array.isArray(doc.ocrPages) && doc.ocrPages.length > 0;
+        
+        if (doc.status === 'REJECTED') {
+            hasRejected = true;
+        } else if (doc.status === 'OCR_PROCESSING') {
+            hasProcessing = true;
+        } else if (doc.status === 'PENDING_REVIEW') {
+            hasPending = true;
+        }
+        
+        // Documents without ocrPages are considered "completed" (no OCR needed)
+        // Documents with ocrPages need to be OCR_COMPLETED
+        if (hasOcrPages && doc.status !== 'OCR_COMPLETED' && doc.status !== 'REJECTED') {
+            allCompleted = false;
+        } else if (!hasOcrPages && doc.status !== 'PENDING_REVIEW' && doc.status !== 'REJECTED') {
+            // For documents without OCR, PENDING_REVIEW is acceptable
+            // But if they're in other states, we need to check
+            allCompleted = false;
+        }
+    }
+
     let newBundleStatus;
     
     // Logic: 
     // - Nếu có document REJECTED (do OCR lỗi) → OCR_FAILED
-    // - Nếu tất cả OCR_COMPLETED → OCR_COMPLETED
+    // - Nếu tất cả đã hoàn thành (OCR_COMPLETED hoặc không cần OCR) → OCR_COMPLETED
     // - Nếu còn OCR_PROCESSING → OCR_PROCESSING
     // - Nếu còn PENDING_REVIEW → PENDING_REVIEW
     
-    if (statuses.includes('REJECTED')) {
+    if (hasRejected) {
         // Có document bị reject (OCR lỗi) → Bundle OCR_FAILED
         newBundleStatus = 'OCR_FAILED';
-    } else if (statuses.every(s => s === 'OCR_COMPLETED')) {
-        // Tất cả đã OCR thành công
+    } else if (allCompleted && !hasProcessing && !hasPending) {
+        // Tất cả đã hoàn thành
         newBundleStatus = 'OCR_COMPLETED';
-    } else if (statuses.includes('OCR_PROCESSING')) {
+    } else if (hasProcessing) {
         // Còn đang xử lý
         newBundleStatus = 'OCR_PROCESSING';
-    } else if (statuses.includes('PENDING_REVIEW')) {
+    } else if (hasPending) {
         // Còn chờ duyệt
         newBundleStatus = 'PENDING_REVIEW';
     } else {
@@ -174,6 +199,7 @@ async function supplierCreate(userId, payload) {
             d.storagePath.toLowerCase().includes('.xls')
         );
 
+<<<<<<< HEAD
         let ocrPages = [];
         
         if (!isExcelFile) {
@@ -181,6 +207,9 @@ async function supplierCreate(userId, payload) {
             ocrPages = Array.isArray(d.ocrPages)
                 ? d.ocrPages.filter(p => p && p.ocrStoragePath)
                 : [];
+=======
+        // ocrPages is now optional - documents can be uploaded without OCR images
+>>>>>>> quyetdev
 
             if (ocrPages.length === 0) {
                 failed.push({ index: idx, message: 'Thiếu ocrPages (danh sách URL ảnh OCR cho từng trang)' });
@@ -634,14 +663,68 @@ async function staffReview(staffUserId, bundleId, payload) {
             }
         );
     } else if (action === 'APPROVE') {
-        // Cập nhật Bundle
-        bundle.status = 'OCR_PROCESSING';
+        // APPROVE - update documents based on whether they have OCR pages
+        const updatePromises = [];
+        const ocrJobs = [];
+        
+        docs.forEach(doc => {
+            const hasOcrPages = Array.isArray(doc.ocrPages) && doc.ocrPages.length > 0;
+            
+            if (hasOcrPages) {
+                // Document has OCR pages - set to processing and start OCR
+                updatePromises.push(
+                    Document.findByIdAndUpdate(
+                        doc._id,
+                        {
+                            $set: {
+                                status: 'OCR_PROCESSING',
+                                approvedBy: staffUserId,
+                                approvedAt: new Date(),
+                                updatedAt: new Date()
+                            }
+                        },
+                        { new: true, lean: true }
+                    )
+                );
+                // Start OCR for this document
+                ocrJobs.push(doc._id);
+            } else {
+                // Document has no OCR pages - mark as completed (no OCR needed)
+                updatePromises.push(
+                    Document.findByIdAndUpdate(
+                        doc._id,
+                        {
+                            $set: {
+                                status: 'OCR_COMPLETED', // Treat as completed since no OCR needed
+                                approvedBy: staffUserId,
+                                approvedAt: new Date(),
+                                updatedAt: new Date(),
+                                ocrResult: 'No OCR required - document uploaded without image pages'
+                            }
+                        },
+                        { new: true, lean: true }
+                    )
+                );
+            }
+        });
+        
+        await Promise.all(updatePromises);
+        
+        // Set bundle status based on whether any documents need OCR
+        if (ocrJobs.length > 0) {
+            bundle.status = 'OCR_PROCESSING';
+        } else {
+            // All documents completed without OCR
+            bundle.status = 'OCR_COMPLETED';
+        }
+        
         bundle.approvedBy = staffUserId;
         bundle.approvedAt = new Date();
         bundle.reviewNotes = [...(bundle.reviewNotes || []), reviewNote];
         bundle.updatedAt = new Date();
         await bundle.save();
 
+<<<<<<< HEAD
         // APPROVE - update all documents to OCR_PROCESSING
         const updatePromises = [];
         docs.forEach(doc => {
@@ -678,6 +761,12 @@ async function staffReview(staffUserId, bundleId, payload) {
             }
         });
         await Promise.all(updatePromises);
+=======
+        // Start OCR for documents that have ocrPages
+        ocrJobs.forEach(docId => {
+            setImmediate(() => startOcrJob(docId).catch(() => {}));
+        });
+>>>>>>> quyetdev
     } else {
         const err = new Error('Action không hợp lệ. Phải là APPROVE hoặc REJECT');
         err.status = constants.HTTP_STATUS.BAD_REQUEST;

@@ -174,6 +174,7 @@ async function updateNplInTable(lohangDraftId, nplIndex, updatedNpl, userId) {
     throw err;
   }
 
+<<<<<<< HEAD
   const oldNpl = table.materials[index];
   const editedFields = [];
 
@@ -200,14 +201,30 @@ async function updateNplInTable(lohangDraftId, nplIndex, updatedNpl, userId) {
   Object.assign(table.materials[index], updatedNpl);
   table.materials[index].isEdited = true;
   table.materials[index].editedFields = [...new Set([...(table.materials[index].editedFields || []), ...editedFields])];
+=======
+  // Cập nhật NPL - chỉ cho phép sửa 5 cột: nplCode, invoiceNo, invoiceDate, quantity, origin
+  const allowedFields = ['nplCode', 'invoiceNo', 'invoiceDate', 'quantity', 'origin'];
+  const filteredUpdate = {};
+  
+  Object.keys(updatedNpl).forEach(key => {
+    if (allowedFields.includes(key)) {
+      filteredUpdate[key] = updatedNpl[key];
+    }
+  });
+  
+  Object.assign(table.materials[index], filteredUpdate);
+>>>>>>> quyetdev
   
   table.status = 'EDITED';
   table.updatedAt = new Date();
 
+<<<<<<< HEAD
   // Tính lại tổng
   table.totalQuantity = table.materials.reduce((sum, m) => sum + (m.quantityImported || 0), 0);
   table.totalValueVnd = table.materials.reduce((sum, m) => sum + (m.totalValueVnd || 0), 0);
 
+=======
+>>>>>>> quyetdev
   await table.save();
 
   return table;
