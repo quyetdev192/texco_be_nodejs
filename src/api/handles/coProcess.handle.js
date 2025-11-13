@@ -84,6 +84,9 @@ async function listCO(userId, query) {
         co.bundleId = firstDoc.bundleId;
       }
     }
+    
+    // Thêm trạng thái step hiện tại (tiếng Việt)
+    co.statusText = constants.CO_STEP_VI[co.currentStep] || `Step ${co.currentStep}`;
   }
 
   return {
@@ -678,22 +681,36 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
         } : null,
         message: `Đã tạo lại ${ctcReportsResult?.totalReports || 0} bảng kê. Có thể xác nhận hoàn thành.`
       };
-    } else if (lohangDraft.status === 'REPORTS_GENERATED') {
-      // Step 5 → 6: Sẵn sàng hoàn thành
-      console.log('📋 Step 5: Reports generated, ready to complete');
+    } else {
+      // Step 5 → 6: User xác nhận hoàn thành step 5
+      console.log('✅ Step 5: Confirming report generation completion...');
+      
+      // Mark step 5 completed và chuyển sang step 6
+      await LohangDraft.findByIdAndUpdate(lohangDraftId, {
+        'workflowSteps.step5_generateReports.completed': true,
+        'workflowSteps.step5_generateReports.completedAt': new Date(),
+        'workflowSteps.step5_generateReports.inProgress': false,
+        currentStep: 6,
+        status: 'REPORTS_GENERATED',
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ Step 5 completed, moved to Step 6');
+      
+      const updated = await LohangDraft.findById(lohangDraftId).lean();
+      const workflowInfo = getWorkflowInfo(updated);
       
       return {
-        _id: lohangDraft._id,
-        currentStep: lohangDraft.currentStep,
-        status: lohangDraft.status,
-        workflow: getWorkflowInfo(lohangDraft),
-        ctcReports: lohangDraft.ctcReports ? {
+        _id: updated._id,
+        currentStep: updated.currentStep,
+        status: updated.status,
+        workflow: workflowInfo,
+        ctcReports: updated.ctcReports ? {
           success: true,
-          totalReports: lohangDraft.ctcReports.length,
-          reports: lohangDraft.ctcReports
+          totalReports: updated.ctcReports.length,
+          reports: updated.ctcReports
         } : null,
-        message: 'Đã có bảng kê. Có thể xác nhận hoàn thành hồ sơ C/O.',
-        canComplete: true
+        message: '✅ Đã xác nhận hoàn thành Step 5. Chuyển sang Step 6 - Xem xét Kết quả.'
       };
     }
   } else {
@@ -1351,39 +1368,36 @@ function getWorkflowInfo(lohangDraft) {
     },
     {
       step: 4,
-      name: 'Review Tables',
-      key: 'step4_reviewTables',
-      completed: workflowSteps?.step4_reviewTables?.completed || false,
-      completedAt: workflowSteps?.step4_reviewTables?.completedAt
+      name: 'Calculate Allocation',
+      key: 'step4_calculate',
+      completed: workflowSteps?.step4_calculate?.completed || false,
+      completedAt: workflowSteps?.step4_calculate?.completedAt,
+      inProgress: workflowSteps?.step4_calculate?.inProgress || false,
+      errors: workflowSteps?.step4_calculate?.errors || [],
+      warnings: workflowSteps?.step4_calculate?.warnings || []
     },
     {
       step: 5,
-      name: 'Confirm Data',
-      key: 'step5_confirmData',
-      completed: workflowSteps?.step5_confirmData?.completed || false,
-      completedAt: workflowSteps?.step5_confirmData?.completedAt
+      name: 'Generate Reports',
+      key: 'step5_generateReports',
+      completed: workflowSteps?.step5_generateReports?.completed || false,
+      completedAt: workflowSteps?.step5_generateReports?.completedAt,
+      inProgress: workflowSteps?.step5_generateReports?.inProgress || false,
+      errors: workflowSteps?.step5_generateReports?.errors || []
     },
     {
       step: 6,
-      name: 'Calculate Allocation',
-      key: 'step6_calculate',
-      completed: workflowSteps?.step6_calculate?.completed || false,
-      completedAt: workflowSteps?.step6_calculate?.completedAt,
-      inProgress: workflowSteps?.step6_calculate?.inProgress || false
+      name: 'Review Results',
+      key: 'step6_reviewResults',
+      completed: workflowSteps?.step6_reviewResults?.completed || false,
+      completedAt: workflowSteps?.step6_reviewResults?.completedAt
     },
     {
       step: 7,
-      name: 'Review Results',
-      key: 'step7_reviewResults',
-      completed: workflowSteps?.step7_reviewResults?.completed || false,
-      completedAt: workflowSteps?.step7_reviewResults?.completedAt
-    },
-    {
-      step: 8,
       name: 'Export C/O',
-      key: 'step8_exportCO',
-      completed: workflowSteps?.step8_exportCO?.completed || false,
-      completedAt: workflowSteps?.step8_exportCO?.completedAt
+      key: 'step7_exportCO',
+      completed: workflowSteps?.step7_exportCO?.completed || false,
+      completedAt: workflowSteps?.step7_exportCO?.completedAt
     }
   ];
 
@@ -1437,28 +1451,15 @@ function getWorkflowInfo(lohangDraft) {
     };
     canProceed = false;
     message = 'Data extraction in progress. Please wait...';
-  } else if (currentStep === 4) {
-    nextAction = {
-      type: 'REVIEW_TABLES',
-      endpoint: `/api/v1/co/lohang/${lohangDraft._id}/tables`,
-      method: 'GET',
-      label: 'Review Extracted Tables'
-    };
-  } else if (currentStep === 5) {
-    nextAction = {
-      type: 'CONFIRM_DATA',
-      endpoint: `/api/v1/co/lohang/${lohangDraft._id}/tables/confirm`,
-      method: 'PUT',
-      label: 'Confirm All Tables'
-    };
-  } else if (currentStep === 6 && !workflowSteps?.step6_calculate?.inProgress) {
+  } else if (currentStep === 4 && !workflowSteps?.step4_calculate?.completed && !workflowSteps?.step4_calculate?.inProgress) {
     nextAction = {
       type: 'CALCULATE',
-      endpoint: `/api/v1/co/calculate/${lohangDraft._id}`,
+      endpoint: `/api/v1/co/lohang/${lohangDraft._id}/continue`,
       method: 'POST',
-      label: 'Calculate Allocation'
+      label: 'Start Calculation',
+      description: 'Calculate Allocation & Generate Warnings'
     };
-  } else if (currentStep === 6 && workflowSteps?.step6_calculate?.inProgress) {
+  } else if (currentStep === 4 && workflowSteps?.step4_calculate?.inProgress) {
     nextAction = {
       type: 'WAIT',
       label: 'Calculating...',
@@ -1467,6 +1468,37 @@ function getWorkflowInfo(lohangDraft) {
     };
     canProceed = false;
     message = 'Calculation in progress. Please wait...';
+  } else if (currentStep === 5 && !workflowSteps?.step5_generateReports?.completed && !workflowSteps?.step5_generateReports?.inProgress) {
+    nextAction = {
+      type: 'GENERATE_REPORTS',
+      endpoint: `/api/v1/co/lohang/${lohangDraft._id}/continue`,
+      method: 'POST',
+      label: 'Generate Reports',
+      description: 'Generate CTC Reports for all SKUs'
+    };
+  } else if (currentStep === 5 && workflowSteps?.step5_generateReports?.inProgress) {
+    nextAction = {
+      type: 'WAIT',
+      label: 'Generating Reports...',
+      polling: true,
+      pollingInterval: 3000
+    };
+    canProceed = false;
+    message = 'Report generation in progress. Please wait...';
+  } else if (currentStep === 6) {
+    nextAction = {
+      type: 'REVIEW_RESULTS',
+      endpoint: `/api/v1/co/lohang/${lohangDraft._id}/ctc-reports`,
+      method: 'GET',
+      label: 'Review CTC Reports'
+    };
+  } else if (currentStep === 7) {
+    nextAction = {
+      type: 'EXPORT_CO',
+      endpoint: `/api/v1/co/lohang/${lohangDraft._id}/complete`,
+      method: 'POST',
+      label: 'Complete & Export C/O'
+    };
   }
 
   return {

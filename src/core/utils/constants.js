@@ -210,6 +210,30 @@ const RESPONSE_FORMATS = {
     XML: 'xml'
 };
 
+const CO_STEP_VI = {
+    1: 'Step 1 - Upload Chứng từ',
+    2: 'Step 2 - Chọn Form & Tiêu chí',
+    3: 'Step 3 - Trích xuất Dữ liệu',
+    4: 'Step 4 - Tính toán Phân bổ',
+    5: 'Step 5 - Tạo Bảng kê CTC',
+    6: 'Step 6 - Xem xét Kết quả',
+    7: 'Step 7 - Xuất C/O'
+};
+
+const CO_STATUS_VI = {
+    DRAFT: 'Nháp',
+    DATA_EXTRACTING: 'Đang trích xuất dữ liệu',
+    EXTRACTION_FAILED: 'Trích xuất thất bại',
+    SETUP_COMPLETED: 'Cấu hình hoàn thành',
+    DATA_CONFIRMED: 'Dữ liệu đã xác nhận',
+    CALCULATING: 'Đang tính toán',
+    CALCULATED_WITH_WARNINGS: 'Tính toán hoàn thành (có cảnh báo)',
+    CALCULATION_FAILED: 'Tính toán thất bại',
+    REPORTS_GENERATED: 'Báo cáo đã tạo',
+    COMPLETED: 'Hoàn thành',
+    FAILED: 'Thất bại'
+};
+
 module.exports = {
     ENV,
     HTTP_STATUS,
@@ -224,5 +248,7 @@ module.exports = {
     DATABASE,
     LOGGING,
     API_VERSIONS,
-    RESPONSE_FORMATS
+    RESPONSE_FORMATS,
+    CO_STEP_VI,
+    CO_STATUS_VI
 }; 

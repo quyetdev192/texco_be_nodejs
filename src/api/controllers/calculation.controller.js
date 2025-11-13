@@ -30,9 +30,6 @@ const getConsumptionTable = asyncHandler(async (req, res) => {
   // Format lại data theo 15 cột yêu cầu
   const formattedDetails = details.map(detail => ({
     // Thông tin SKU (để group by)
-    skuCode: detail.skuCode,
-    productName: detail.productName,
-    quantitySku: detail.quantitySku,
     
     // === 15 CỘT CHÍNH ===
     // 1. MÃ NL - Mã nguyên phụ liệu
@@ -81,10 +78,6 @@ const getConsumptionTable = asyncHandler(async (req, res) => {
     xuatXu: detail.xuatXu || '',
     
     // Metadata bổ sung
-    normPerSku: detail.normPerSku,
-    totalQuantityNeeded: detail.totalQuantityNeeded,
-    allocationOrder: detail.allocationOrder,
-    status: detail.status
   }));
 
   // Tính summary
