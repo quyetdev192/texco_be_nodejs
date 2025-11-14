@@ -149,58 +149,56 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Header tầng 2 & 3 - Tất cả sub-headers trong 1 row
     // Merge "Trị giá (USD)" cho 2 cột (CÓ XX + KHÔNG CÓ XX)
     worksheet.mergeCells(row, 7, row, 8);
     
-    const allSubHeaders = [
-      { col: 1, text: 'STT', isMerged: false },
-      { col: 2, text: 'Tên nguyên liệu', isMerged: false },
-      { col: 3, text: 'Mã HS', isMerged: false },
-      { col: 4, text: 'Đơn vị tính', isMerged: false },
-      { col: 5, text: 'Định mức', isMerged: false },
-      { col: 6, text: 'Đơn giá (CIF)', isMerged: false },
-      { col: 7, text: 'Trị giá (USD)', isMerged: true },
-      { col: 9, text: 'Nước xuất xứ', isMerged: false },
-      { col: 10, text: 'Số', isMerged: false },
-      { col: 11, text: 'Ngày', isMerged: false },
-      { col: 12, text: 'Số', isMerged: false },
-      { col: 13, text: 'Ngày', isMerged: false }
+    // Header duy nhất - không lặp
+    const headers = [
+      { col: 1, text: 'STT', align: 'center' },
+      { col: 2, text: 'Tên nguyên liệu', align: 'left' },
+      { col: 3, text: 'Mã HS', align: 'center' },
+      { col: 4, text: 'Đơn vị tính', align: 'center' },
+      { col: 5, text: 'Định mức', align: 'right' },
+      { col: 6, text: 'Đơn giá (CIF)', align: 'right' },
+      { col: 7, text: 'Trị giá (USD)', align: 'center' },
+      { col: 9, text: 'Nước xuất xứ', align: 'left' },
+      { col: 10, text: 'Số', align: 'center' },
+      { col: 11, text: 'Ngày', align: 'center' },
+      { col: 12, text: 'Số', align: 'center' },
+      { col: 13, text: 'Ngày', align: 'center' }
     ];
 
-    allSubHeaders.forEach((header) => {
+    headers.forEach((header) => {
       const cell = worksheet.getCell(row, header.col);
       cell.value = header.text;
-      cell.font = { name: 'Times New Roman', size: 8, bold: true };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.font = { name: 'Times New Roman', size: 9, bold: true };
+      cell.alignment = { horizontal: header.align, vertical: 'middle', wrapText: true };
       cell.border = {
-        top: { style: 'thin' },
+        top: { style: 'medium' },
         left: { style: 'thin' },
-        bottom: { style: 'thin' },
+        bottom: { style: 'medium' },
         right: { style: 'thin' }
       };
     });
     worksheet.getRow(row).height = 25;
     row++;
 
-    // Header tầng 3 - Chi tiết CÓ XX / KHÔNG CÓ XX
-    const detailHeaders = [
-      '', '', '', '', '',
-      '', 'CÓ XX', 'KHÔNG CÓ XX',
-      '', '', '', '', ''
+    // Sub-header: CÓ XX / KHÔNG CÓ XX (chỉ dưới cột 7-8)
+    const subHeaders = [
+      '', '', '', '', '', '', 'CÓ XX', 'KHÔNG CÓ XX', '', '', '', '', ''
     ];
 
-    detailHeaders.forEach((header, index) => {
+    subHeaders.forEach((header, index) => {
       const cell = worksheet.getCell(row, index + 1);
       if (header) {
         cell.value = header;
-        cell.font = { name: 'Times New Roman', size: 8, bold: true };
+        cell.font = { name: 'Times New Roman', size: 9, bold: true };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
       }
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
-        bottom: { style: 'thin' },
+        bottom: { style: 'medium' },
         right: { style: 'thin' }
       };
     });
@@ -237,8 +235,15 @@ class CTHTemplate extends BaseTemplate {
         const cell = worksheet.getCell(row, colIndex + 1);
         cell.value = data;
         cell.font = { name: 'Times New Roman', size: 9 };
+        
+        // Căn lề đúng theo cột
+        let alignment = 'center';
+        if (colIndex === 1) alignment = 'left'; // Tên nguyên liệu
+        if (colIndex === 8) alignment = 'left'; // Nước xuất xứ
+        if ([4, 5, 6].includes(colIndex)) alignment = 'right'; // Định mức, Đơn giá, Trị giá
+        
         cell.alignment = {
-          horizontal: [1, 9, 10].includes(colIndex) ? 'left' : 'center',
+          horizontal: alignment,
           vertical: 'middle',
           wrapText: true
         };
@@ -249,11 +254,10 @@ class CTHTemplate extends BaseTemplate {
           right: { style: 'thin' }
         };
 
-        if ([4, 5].includes(colIndex)) {
-          cell.numFmt = '0.00000000';
-        } else if (colIndex === 7) {
-          cell.numFmt = '0.00';
-        }
+        // Format số
+        if (colIndex === 4) cell.numFmt = '0.00000000'; // Định mức
+        if (colIndex === 5) cell.numFmt = '0.00'; // Đơn giá
+        if ([6, 7].includes(colIndex)) cell.numFmt = '0.00'; // Trị giá
       });
 
       worksheet.getRow(row).height = 18;
@@ -265,12 +269,17 @@ class CTHTemplate extends BaseTemplate {
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
-      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 6 || colIndex === 7 };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.font = { name: 'Times New Roman', size: 9, bold: true };
+      
+      let alignment = 'center';
+      if (colIndex === 1) alignment = 'left'; // Cộng
+      if ([6, 7].includes(colIndex)) alignment = 'right'; // Trị giá
+      
+      cell.alignment = { horizontal: alignment, vertical: 'middle' };
       cell.border = {
-        top: { style: 'thin' },
+        top: { style: 'medium' },
         left: { style: 'thin' },
-        bottom: { style: 'thin' },
+        bottom: { style: 'medium' },
         right: { style: 'thin' }
       };
 
@@ -281,8 +290,8 @@ class CTHTemplate extends BaseTemplate {
 
     worksheet.getRow(row).height = 18;
 
-    // Set column widths - 13 cột
-    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 8, 10, 8];
+    // Set column widths - 13 cột (match template)
+    const columnWidths = [4, 22, 10, 10, 12, 12, 11, 11, 14, 8, 10, 8, 10];
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
     });
