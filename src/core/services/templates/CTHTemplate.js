@@ -254,7 +254,7 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Kết luận + Footer với ngày lập trên, người đại diện dưới
+   * Kết luận + Footer - ngày lập trên trái, người đại diện trên phải, chữ ký dưới
    */
   addConclusionCompact(worksheet, startRow, skuData) {
     let row = startRow;
@@ -268,7 +268,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 18;
     row += 2;
 
-    // Ngày lập (trên cùng)
+    // Ngày lập (trên trái) + Người đại diện (trên phải) - cùng hàng
     const today = new Date();
     const day = today.getDate();
     const month = today.getMonth() + 1;
@@ -280,10 +280,7 @@ class CTHTemplate extends BaseTemplate {
     dateCell.value = dateStr;
     dateCell.font = { name: 'Times New Roman', size: 9 };
     dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.getRow(row).height = 16;
-    row += 3;
 
-    // Người đại diện (dưới)
     worksheet.mergeCells(`J${row}:N${row}`);
     const repCell = worksheet.getCell(`J${row}`);
     repCell.value = 'Người đại diện theo pháp luật thương nhân';
@@ -292,7 +289,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 16;
     row += 2;
 
-    // Chữ ký và dấu
+    // Chữ ký và dấu (dưới phải)
     worksheet.mergeCells(`J${row}:N${row}`);
     const signCell = worksheet.getCell(`J${row}`);
     signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
