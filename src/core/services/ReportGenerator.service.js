@@ -114,12 +114,7 @@ class ReportGeneratorService {
         unique_filename: false,
         overwrite: true,
         // Set MIME type để browser nhận diện đúng file type
-        mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        // Thêm metadata để Cloudinary xử lý đúng
-        metadata: {
-          filename: fileName,
-          content_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        }
+        mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       };
 
       const result = await cloudinary.uploader.upload(

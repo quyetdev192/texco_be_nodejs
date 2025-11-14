@@ -275,12 +275,13 @@ async function downloadExcelReport(publicId) {
       responseType: 'arraybuffer'
     });
 
-    // Lấy tên file từ metadata hoặc public_id
-    const fileName = resource.metadata?.filename || `${publicId}.xlsx`;
+    // Lấy tên file từ public_id hoặc filename
+    const fileName = resource.public_id?.split('/').pop() || `${publicId}.xlsx`;
+    const finalFileName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
 
     return {
       buffer: response.data,
-      fileName: fileName
+      fileName: finalFileName
     };
   } catch (error) {
     if (error.status) throw error;
