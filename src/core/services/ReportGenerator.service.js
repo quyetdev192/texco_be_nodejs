@@ -289,64 +289,90 @@ class ReportGeneratorService {
   }
 
   /**
-   * Tính toán dữ liệu cho 1 SKU
+   * Tính toán dữ liệu cho 1 SKU theo quy trình FULL (6 bước)
    */
   calculateSKUData(product, data) {
     const { bomTable, nplTable, lohangDraft } = data;
+    
+    // STEP 1 — Lấy danh sách sản phẩm (ExtractedProductTable)
     const skuCode = product.skuCode;
-    const quantity = product.quantity;
-    const fobValueUsd = product.fobValueUsd;
+    const productQty = product.quantity;
+    const productHs = product.hsCode;
+    const fobUsd = product.fobValueUsd;
+    const exchangeRate = lohangDraft.exchangeRate || 25000;
 
-    // Tìm các NPL liên quan đến SKU này từ BOM
     const nplDetails = [];
     let totalNPLValue = 0;
     let chinaOriginValue = 0;
 
+    // Loop qua từng NPL trong BOM
     for (const bomMaterial of bomTable.bomData || []) {
-      const normPerSku = bomMaterial.normPerSku?.[skuCode];
-      if (!normPerSku || normPerSku === 0) continue;
+      // STEP 2 — Tính tổng lượng NPL từ BOM (ExtractedBomTable)
+      const norm = bomMaterial.normPerSku?.[skuCode];
+      if (!norm || norm === 0) continue;
+      
+      const totalNplQty = norm * productQty;
 
-      // Tìm NPL tương ứng trong NPL table
+      // Tìm NPL info theo maNl (chính xác hơn)
       const nplInfo = (nplTable.materials || []).find(m => 
-        this.matchNPLName(m.tenHang, bomMaterial.nplName)
+        m.maNl === bomMaterial.nplCode || this.matchNPLName(m.tenHang, bomMaterial.nplName)
       );
 
       if (nplInfo) {
-        const totalUsage = normPerSku * quantity;
-        const nplValue = totalUsage * (nplInfo.donGiaUsd || 0);
+        // STEP 3 — Lấy giá NPL (ExtractedNplTable)
+        const unitPriceVnd = nplInfo.donGia || 0;
+        const exchange = nplInfo.tyGiaVndUsd || exchangeRate;
+        let unitPriceUsd = nplInfo.donGiaUsd;
         
+        // Nếu donGiaUsd chưa có: donGiaUsd = donGia / tyGiaVndUsd
+        if (!unitPriceUsd && unitPriceVnd && exchange) {
+          unitPriceUsd = unitPriceVnd / exchange;
+        }
+
+        // STEP 4 — Tính trị giá CIF USD
+        const triGiaCifUsd = totalNplQty * (unitPriceUsd || 0);
+
+        // STEP 5 — Ghi xuất xứ
+        let nuocXuatXu = nplInfo.xuatXu || '';
+        if (nuocXuatXu.includes("VN")) {
+          nuocXuatXu = nuocXuatXu.includes("CO") ? "MUA VN COXX" : "MUA VN KRXX";
+        } else if (nuocXuatXu.includes("CHINA")) {
+          nuocXuatXu = nuocXuatXu.includes("CO") ? "NK CHINA COXX" : "NK CHINA KRXX";
+        }
+
+        // STEP 6 — Gộp thành bảng kê cuối
         nplDetails.push({
           stt: nplDetails.length + 1,
-          tenNguyenLieu: nplInfo.tenHang,
+          tenNguyenLieu: nplInfo.tenHang || bomMaterial.nplName,
           maHS: nplInfo.hsCode || bomMaterial.hsCode || '',
           donViTinh: nplInfo.donViTinh || bomMaterial.unit || '',
-          dinhMuc: normPerSku,
-          tongLuongSuDung: totalUsage,
-          nhuCauSuDung: totalUsage, // Giống tổng lượng sử dụng
-          donGiaCIF: nplInfo.donGiaUsd || 0,
-          triGia: nplValue,
-          nuocXuatXu: nplInfo.xuatXu || 'MUA VN KRXX',
+          dinhMuc: norm,
+          tongLuongSuDung: totalNplQty,
+          donGiaCIF: unitPriceUsd || 0,
+          triGia: triGiaCifUsd,
+          nuocXuatXu: nuocXuatXu,
           soHoaDon: nplInfo.soHd || '',
-          ngayHoaDon: nplInfo.ngayHd ? new Date(nplInfo.ngayHd) : null
+          ngayHoaDon: nplInfo.ngayHd ? new Date(nplInfo.ngayHd) : null,
+          soChungNhan: nplInfo.soChungNhan || '',
+          ngayChungNhan: nplInfo.ngayChungNhan ? new Date(nplInfo.ngayChungNhan) : null
         });
 
-        totalNPLValue += nplValue;
+        totalNPLValue += triGiaCifUsd;
 
-        // Nếu xuất xứ từ Trung Quốc
-        if (nplInfo.xuatXu && nplInfo.xuatXu.includes('CHINA')) {
-          chinaOriginValue += nplValue;
+        // Tính china origin value
+        if (nuocXuatXu.includes('CHINA')) {
+          chinaOriginValue += triGiaCifUsd;
         }
       }
     }
 
     // Tính FOB loại trừ nguyên liệu từ Trung Quốc
-    const fobExcludingChina = fobValueUsd - chinaOriginValue;
+    const fobExcludingChina = fobUsd - chinaOriginValue;
     
     // Tính tỷ lệ CTC (%)
-    const ctcPercentage = fobValueUsd > 0 ? (fobExcludingChina / fobValueUsd) * 100 : 0;
+    const ctcPercentage = fobUsd > 0 ? (fobExcludingChina / fobUsd) * 100 : 0;
     
     // Kết luận đạt tiêu chí hay không (≥ 40%)
-    // Sử dụng criterionType từ lohangDraft để hiển thị đúng tiêu chí
     const criterionType = lohangDraft.criterionType || 'CTC';
     const conclusion = ctcPercentage >= 40 ? `ĐẠT TIÊU CHÍ ${criterionType}` : `KHÔNG ĐẠT TIÊU CHÍ ${criterionType}`;
 
@@ -358,7 +384,7 @@ class ReportGeneratorService {
       fobExcludingChina,
       ctcPercentage,
       conclusion,
-      exchangeRate: lohangDraft.exchangeRate || 25000
+      exchangeRate
     };
   }
 

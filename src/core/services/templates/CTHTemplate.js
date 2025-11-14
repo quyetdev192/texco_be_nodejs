@@ -217,9 +217,9 @@ class CTHTemplate extends BaseTemplate {
         npl.donViTinh || '', // Đơn vị tính
         npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
         npl.donGiaCIF || '', // Đơn giá (CIF)
-        npl.xuatXu ? (npl.triGia ? npl.triGia.toFixed(2) : '') : '', // Trị giá CÓ XX
-        npl.xuatXu ? '' : (npl.triGia ? npl.triGia.toFixed(2) : ''), // Trị giá KHÔNG CÓ XX
-        npl.xuatXu || '', // Nước xuất xứ
+        npl.nuocXuatXu ? (npl.triGia ? npl.triGia.toFixed(2) : '') : '', // Trị giá CÓ XX
+        npl.nuocXuatXu ? '' : (npl.triGia ? npl.triGia.toFixed(2) : ''), // Trị giá KHÔNG CÓ XX
+        npl.nuocXuatXu || '', // Nước xuất xứ
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
         npl.soChungNhan || '', // Số C/O
@@ -259,7 +259,7 @@ class CTHTemplate extends BaseTemplate {
     let totalKhongCoXX = 0;
     nplDetails.forEach((npl) => {
       if (npl.triGia) {
-        if (npl.xuatXu) {
+        if (npl.nuocXuatXu) {
           totalCoXX += npl.triGia;
         } else {
           totalKhongCoXX += npl.triGia;
