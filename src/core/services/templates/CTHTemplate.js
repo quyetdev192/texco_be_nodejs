@@ -21,22 +21,22 @@ class CTHTemplate extends BaseTemplate {
     let currentRow = 1;
 
     // 1. Tiêu đề chính
-    worksheet.mergeCells(`A${currentRow}:N${currentRow}`);
+    worksheet.mergeCells(`A${currentRow}:M${currentRow}`);
     const titleCell = worksheet.getCell(`A${currentRow}`);
     titleCell.value = `BẢNG KÊ KHAI HÀNG HÓA XUẤT KHẨU ĐẠT TIÊU CHÍ "CTH"`;
-    titleCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    titleCell.font = { name: 'Times New Roman', size: 13, bold: true };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(currentRow).height = 20;
+    worksheet.getRow(currentRow).height = 22;
     currentRow++;
 
     // 2. Subtitle
-    worksheet.mergeCells(`A${currentRow}:N${currentRow}`);
+    worksheet.mergeCells(`A${currentRow}:M${currentRow}`);
     const subtitleCell = worksheet.getCell(`A${currentRow}`);
     subtitleCell.value = `(Ban hành theo Thông tư số 05/2018/TT-BCT ngày 03/04/2018 quy định về xuất xứ hàng hóa)`;
     subtitleCell.font = { name: 'Times New Roman', size: 9, italic: true };
     subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     worksheet.getRow(currentRow).height = 15;
-    currentRow += 2;
+    currentRow += 3;
 
     // 3. Thông tin công ty (2 cột)
     this.addCompanyInfoCompact(worksheet, currentRow, headerInfo, skuData);
@@ -58,57 +58,83 @@ class CTHTemplate extends BaseTemplate {
   addCompanyInfoCompact(worksheet, startRow, headerInfo, skuData) {
     let row = startRow;
 
-    // Cột trái: Thông tin công ty
+    // Cột trái: Thông tin công ty (căn trái)
     worksheet.getCell(`A${row}`).value = 'Tên thương nhân:';
     worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`B${row}:D${row}`);
     worksheet.getCell(`B${row}`).value = headerInfo.companyName || 'CÔNG TY TNHH MAI THƠ VIỆT NAM';
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`B${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
     row++;
 
     worksheet.getCell(`A${row}`).value = 'Mã số thuế:';
     worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`B${row}:D${row}`);
     worksheet.getCell(`B${row}`).value = headerInfo.taxCode || '3702797777';
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`B${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
     row++;
 
     worksheet.getCell(`A${row}`).value = 'Tờ khai hải quan XK số:';
     worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`B${row}:D${row}`);
     worksheet.getCell(`B${row}`).value = headerInfo.exportDeclarationNumber || '';
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`B${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
     row++;
 
     // Cột phải: Thông tin sản phẩm chi tiết
     const productRow = startRow;
     worksheet.getCell(`H${productRow}`).value = 'Tiêu chí áp dụng:';
     worksheet.getCell(`H${productRow}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`H${productRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`I${productRow}:M${productRow}`);
     worksheet.getCell(`I${productRow}`).value = 'CTH';
     worksheet.getCell(`I${productRow}`).font = { name: 'Times New Roman', size: 10, bold: true };
+    worksheet.getCell(`I${productRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 1}`).value = 'Tên hàng:';
     worksheet.getCell(`H${productRow + 1}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`H${productRow + 1}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`I${productRow + 1}:M${productRow + 1}`);
     worksheet.getCell(`I${productRow + 1}`).value = skuData.product?.productName || '';
     worksheet.getCell(`I${productRow + 1}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 1}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 2}`).value = 'Mã HS:';
     worksheet.getCell(`H${productRow + 2}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`H${productRow + 2}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`I${productRow + 2}:M${productRow + 2}`);
     worksheet.getCell(`I${productRow + 2}`).value = skuData.product?.hsCode || '';
     worksheet.getCell(`I${productRow + 2}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 2}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
-    // Thêm thông tin sản phẩm bổ sung (hàng 4-7)
     worksheet.getCell(`H${productRow + 3}`).value = 'Số lượng:';
     worksheet.getCell(`H${productRow + 3}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`H${productRow + 3}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`I${productRow + 3}:M${productRow + 3}`);
     worksheet.getCell(`I${productRow + 3}`).value = skuData.product?.quantity || '';
     worksheet.getCell(`I${productRow + 3}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 3}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 4}`).value = 'Trị giá FOB:';
     worksheet.getCell(`H${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`H${productRow + 4}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`I${productRow + 4}:M${productRow + 4}`);
     worksheet.getCell(`I${productRow + 4}`).value = skuData.product?.fobValue ? `${skuData.product.fobValue} USD` : '';
     worksheet.getCell(`I${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 4}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 5}`).value = 'Trị giá FOB loại trừ:';
     worksheet.getCell(`H${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`H${productRow + 5}`).alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.mergeCells(`I${productRow + 5}:M${productRow + 5}`);
     worksheet.getCell(`I${productRow + 5}`).value = skuData.product?.fobExcluding ? `${skuData.product.fobExcluding} USD` : '';
     worksheet.getCell(`I${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 5}`).alignment = { horizontal: 'left', vertical: 'middle' };
   }
 
   /**
@@ -129,7 +155,7 @@ class CTHTemplate extends BaseTemplate {
       { col: 5, text: 'Định mức', align: 'right' },
       { col: 6, text: 'Đơn giá (CIF)', align: 'right' },
       { col: 7, text: 'Trị giá (USD)', align: 'center' },
-      { col: 9, text: 'Nước xuất xứ', align: 'center' },
+      { col: 9, text: 'Nước xuất xứ', align: 'left' },
       { col: 10, text: 'Số', align: 'center' },
       { col: 11, text: 'Ngày', align: 'center' },
       { col: 12, text: 'Số', align: 'center' },
@@ -165,9 +191,9 @@ class CTHTemplate extends BaseTemplate {
       }
       cell.border = {
         top: { style: 'thin' },
-        left: { style: 'thin' },
+        left: { style: 'medium' },
         bottom: { style: 'medium' },
-        right: { style: 'thin' }
+        right: { style: 'medium' }
       };
     });
     worksheet.getRow(row).height = 20;
@@ -217,9 +243,9 @@ class CTHTemplate extends BaseTemplate {
         };
         cell.border = {
           top: { style: 'thin' },
-          left: { style: 'thin' },
+          left: { style: 'medium' },
           bottom: { style: 'thin' },
-          right: { style: 'thin' }
+          right: { style: 'medium' }
         };
 
         // Format số
@@ -246,9 +272,9 @@ class CTHTemplate extends BaseTemplate {
       cell.alignment = { horizontal: alignment, vertical: 'middle' };
       cell.border = {
         top: { style: 'medium' },
-        left: { style: 'thin' },
+        left: { style: 'medium' },
         bottom: { style: 'medium' },
-        right: { style: 'thin' }
+        right: { style: 'medium' }
       };
 
       if ([6, 7].includes(colIndex)) {
@@ -282,20 +308,21 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 18;
     row += 2;
 
-    // Ngày lập (trên trái) + Người đại diện (trên phải) - cùng hàng
+    // Ngày lập (trên trái) - căn trái đúng vị trí
     const today = new Date();
     const day = today.getDate();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
     const dateStr = `TP. Hồ Chí Minh, ngày ${day} tháng ${month} năm ${year}`;
 
-    worksheet.mergeCells(`A${row}:D${row}`);
+    worksheet.mergeCells(`A${row}:C${row}`);
     const dateCell = worksheet.getCell(`A${row}`);
     dateCell.value = dateStr;
     dateCell.font = { name: 'Times New Roman', size: 9 };
     dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
 
-    worksheet.mergeCells(`J${row}:N${row}`);
+    // Người đại diện (trên phải)
+    worksheet.mergeCells(`J${row}:M${row}`);
     const repCell = worksheet.getCell(`J${row}`);
     repCell.value = 'Người đại diện theo pháp luật thương nhân';
     repCell.font = { name: 'Times New Roman', size: 9 };
@@ -304,7 +331,7 @@ class CTHTemplate extends BaseTemplate {
     row += 2;
 
     // Chữ ký và dấu (dưới phải)
-    worksheet.mergeCells(`J${row}:N${row}`);
+    worksheet.mergeCells(`J${row}:M${row}`);
     const signCell = worksheet.getCell(`J${row}`);
     signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
     signCell.font = { name: 'Times New Roman', size: 9, italic: true };
