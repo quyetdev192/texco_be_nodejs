@@ -117,7 +117,7 @@ class CTHTemplate extends BaseTemplate {
   addMainMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Header tầng 1 - Các nhóm cột
+    // Header tầng 1 - Các nhóm cột (14 cột, xoá ghi chú)
     const mainHeaders = [
       { col: 1, span: 1, text: 'STT' },
       { col: 2, span: 1, text: 'Tên nguyên liệu' },
@@ -125,11 +125,10 @@ class CTHTemplate extends BaseTemplate {
       { col: 4, span: 1, text: 'Đơn vị tính' },
       { col: 5, span: 1, text: 'Định mức / sản phẩm kế toán' },
       { col: 6, span: 2, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
-      { col: 8, span: 2, text: 'Trị giá' },
+      { col: 8, span: 2, text: 'Trị giá (USD)' },
       { col: 10, span: 1, text: 'Nước xuất xứ' },
       { col: 11, span: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
-      { col: 13, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' },
-      { col: 15, span: 1, text: 'Ghi chú' }
+      { col: 13, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
     ];
 
     // Vẽ header tầng 1
@@ -151,15 +150,14 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Header tầng 2 - Sub-headers
+    // Header tầng 2 - Sub-headers (14 cột)
     const subHeaders = [
       'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính', 'Định mức',
       'Đơn giá (CIF)', 'Trị giá (USD)',
       'CÓ XX', 'KHÔNG CÓ XX',
       'Nước xuất xứ',
       'Số', 'Ngày',
-      'Số', 'Ngày',
-      'Ghi chú'
+      'Số', 'Ngày'
     ];
 
     subHeaders.forEach((header, index) => {
@@ -177,7 +175,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 25;
     row++;
 
-    // Data rows - 15 cột (match sub-headers)
+    // Data rows - 14 cột (xoá ghi chú)
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
       const rowData = [
@@ -194,8 +192,7 @@ class CTHTemplate extends BaseTemplate {
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
         npl.soChungNhan || '', // Số C/O
-        npl.ngayChungNhan ? new Date(npl.ngayChungNhan).toLocaleDateString('vi-VN') : '', // Ngày C/O
-        '' // Ghi chú
+        npl.ngayChungNhan ? new Date(npl.ngayChungNhan).toLocaleDateString('vi-VN') : '' // Ngày C/O
       ];
 
       rowData.forEach((data, colIndex) => {
@@ -226,8 +223,8 @@ class CTHTemplate extends BaseTemplate {
       row++;
     });
 
-    // Total row - 15 cột
-    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', '', ''];
+    // Total row - 14 cột
+    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
@@ -247,8 +244,8 @@ class CTHTemplate extends BaseTemplate {
 
     worksheet.getRow(row).height = 18;
 
-    // Set column widths - 15 cột
-    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 8, 10, 8, 10, 15];
+    // Set column widths - 14 cột
+    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 8, 10, 8, 10];
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
     });
@@ -257,7 +254,7 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Kết luận + Footer với người đại diện và ngày lập
+   * Kết luận + Footer với ngày lập trên, người đại diện dưới
    */
   addConclusionCompact(worksheet, startRow, skuData) {
     let row = startRow;
@@ -271,30 +268,31 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 18;
     row += 2;
 
-    // Footer: Ngày lập (trái) + Người đại diện (phải)
+    // Ngày lập (trên cùng)
     const today = new Date();
     const day = today.getDate();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
     const dateStr = `TP. Hồ Chí Minh, ngày ${day} tháng ${month} năm ${year}`;
 
-    // Ngày lập (cột trái A-D)
     worksheet.mergeCells(`A${row}:D${row}`);
     const dateCell = worksheet.getCell(`A${row}`);
     dateCell.value = dateStr;
     dateCell.font = { name: 'Times New Roman', size: 9 };
     dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(row).height = 16;
+    row += 3;
 
-    // Người đại diện (cột phải J-N)
+    // Người đại diện (dưới)
     worksheet.mergeCells(`J${row}:N${row}`);
     const repCell = worksheet.getCell(`J${row}`);
     repCell.value = 'Người đại diện theo pháp luật thương nhân';
     repCell.font = { name: 'Times New Roman', size: 9 };
     repCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(row).height = 16;
     row += 2;
 
-    // Chữ ký và dấu (cột phải J-N)
+    // Chữ ký và dấu
     worksheet.mergeCells(`J${row}:N${row}`);
     const signCell = worksheet.getCell(`J${row}`);
     signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
