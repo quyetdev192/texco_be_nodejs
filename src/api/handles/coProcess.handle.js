@@ -101,6 +101,97 @@ async function listCO(userId, query) {
 }
 
 /**
+ * Lấy danh sách Form và Tiêu chí được hỗ trợ
+ */
+function getSupportedCombinations() {
+  const supportedCombinations = [
+    {
+      formType: 'FORM_E',
+      criterionType: 'CTH',
+      status: 'supported',
+      description: 'Form E với tiêu chí Change in Tariff Heading'
+    },
+    {
+      formType: 'FORM_E',
+      criterionType: 'CTC',
+      status: 'development',
+      description: 'Form E với tiêu chí Change in Tariff Classification (đang phát triển)'
+    },
+    {
+      formType: 'FORM_B',
+      criterionType: 'CTH',
+      status: 'development',
+      description: 'Form B với tiêu chí Change in Tariff Heading (đang phát triển)'
+    },
+    {
+      formType: 'FORM_B',
+      criterionType: 'CTC',
+      status: 'development',
+      description: 'Form B với tiêu chí Change in Tariff Classification (đang phát triển)'
+    }
+  ];
+
+  return {
+    supportedCombinations,
+    currentlySupported: supportedCombinations.filter(c => c.status === 'supported'),
+    inDevelopment: supportedCombinations.filter(c => c.status === 'development')
+  };
+}
+
+/**
+ * Cập nhật document trong bundle
+ */
+async function updateDocument(bundleId, documentId, payload) {
+  const { fileName, storagePath, note, documentType, ocrPages } = payload;
+
+  const document = await Document.findOne({ _id: documentId, bundleId }).lean();
+  if (!document) {
+    const err = new Error('Document không tồn tại trong bundle này');
+    err.status = constants.HTTP_STATUS.NOT_FOUND;
+    throw err;
+  }
+
+  const updated = await Document.findByIdAndUpdate(
+    documentId,
+    {
+      fileName: fileName || document.fileName,
+      storagePath: storagePath || document.storagePath,
+      note: note || document.note,
+      documentType: documentType || document.documentType,
+      ocrPages: ocrPages || document.ocrPages,
+      status: 'OCR_PROCESSING',
+      updatedAt: new Date()
+    },
+    { new: true }
+  ).lean();
+
+  return { document: updated };
+}
+
+/**
+ * Xoá document khỏi bundle
+ */
+async function deleteDocument(bundleId, documentId) {
+  const document = await Document.findOne({ _id: documentId, bundleId }).lean();
+  if (!document) {
+    const err = new Error('Document không tồn tại trong bundle này');
+    err.status = constants.HTTP_STATUS.NOT_FOUND;
+    throw err;
+  }
+
+  await Document.findByIdAndDelete(documentId);
+  const remainingCount = await Document.countDocuments({ bundleId });
+
+  return {
+    bundle: {
+      _id: bundleId,
+      documentCount: remainingCount
+    },
+    deletedDocumentId: documentId
+  };
+}
+
+/**
  * Tạo C/O draft từ bundle (chỉ cần bundleId)
  * POST /api/v1/co/create
  */
@@ -2108,6 +2199,9 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
 module.exports = {
   getLohangDetail,
   listCO,
+  getSupportedCombinations,
+  updateDocument,
+  deleteDocument,
   createCOFromBundle,
   retryExtraction,
   reExtractTable,

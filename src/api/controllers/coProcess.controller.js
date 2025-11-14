@@ -52,42 +52,12 @@ const createCO = asyncHandler(async (req, res) => {
  * GET /api/v1/co/supported-combinations
  */
 const getSupportedCombinations = asyncHandler(async (req, res) => {
-  const supportedCombinations = [
-    {
-      formType: 'FORM_E',
-      criterionType: 'CTH',
-      status: 'supported',
-      description: 'Form E với tiêu chí Change in Tariff Heading'
-    },
-    {
-      formType: 'FORM_E',
-      criterionType: 'CTC',
-      status: 'development',
-      description: 'Form E với tiêu chí Change in Tariff Classification (đang phát triển)'
-    },
-    {
-      formType: 'FORM_B',
-      criterionType: 'CTH',
-      status: 'development',
-      description: 'Form B với tiêu chí Change in Tariff Heading (đang phát triển)'
-    },
-    {
-      formType: 'FORM_B',
-      criterionType: 'CTC',
-      status: 'development',
-      description: 'Form B với tiêu chí Change in Tariff Classification (đang phát triển)'
-    }
-  ];
-
+  const result = await coProcessHandle.getSupportedCombinations();
   return res.status(constants.HTTP_STATUS.OK).json({
     success: true,
     errorCode: 0,
     message: 'Danh sách Form và Tiêu chí được hỗ trợ',
-    data: {
-      supportedCombinations,
-      currentlySupported: supportedCombinations.filter(c => c.status === 'supported'),
-      inDevelopment: supportedCombinations.filter(c => c.status === 'development')
-    }
+    data: result
   });
 });
 
@@ -141,49 +111,13 @@ const triggerExtractTables = asyncHandler(async (req, res) => {
  */
 const updateDocument = asyncHandler(async (req, res) => {
   const { bundleId, documentId } = req.params;
-  const { fileName, storagePath, note, documentType, ocrPages } = req.body;
-
-  const DocumentClass = require('../models/document.model');
-  const mongoose = require('mongoose');
+  const result = await coProcessHandle.updateDocument(bundleId, documentId, req.body);
   
-  const buildModel = (modelClass) => {
-    const modelName = modelClass.name;
-    if (mongoose.models[modelName]) return mongoose.models[modelName];
-    const schema = new mongoose.Schema(modelClass.getSchema(), { collection: modelClass.collection });
-    return mongoose.model(modelName, schema);
-  };
-
-  const Document = buildModel(DocumentClass);
-
-  const document = await Document.findOne({ _id: documentId, bundleId }).lean();
-  if (!document) {
-    const err = new Error('Document không tồn tại trong bundle này');
-    err.status = constants.HTTP_STATUS.NOT_FOUND;
-    throw err;
-  }
-
-  // Cập nhật document
-  const updated = await Document.findByIdAndUpdate(
-    documentId,
-    {
-      fileName: fileName || document.fileName,
-      storagePath: storagePath || document.storagePath,
-      note: note || document.note,
-      documentType: documentType || document.documentType,
-      ocrPages: ocrPages || document.ocrPages,
-      status: 'OCR_PROCESSING', // Chạy OCR lại
-      updatedAt: new Date()
-    },
-    { new: true }
-  ).lean();
-
-  // TODO: Trigger OCR job here
-
   return res.status(constants.HTTP_STATUS.OK).json({
     success: true,
     errorCode: 0,
     message: 'Đã cập nhật chứng từ và khởi chạy OCR',
-    data: { document: updated }
+    data: result
   });
 });
 
@@ -193,171 +127,103 @@ const updateDocument = asyncHandler(async (req, res) => {
  */
 const deleteDocument = asyncHandler(async (req, res) => {
   const { bundleId, documentId } = req.params;
-
-  const DocumentClass = require('../models/document.model');
-  const BundleClass = require('../models/bundle.model');
-  const mongoose = require('mongoose');
+  const result = await coProcessHandle.deleteDocument(bundleId, documentId);
   
-  const buildModel = (modelClass) => {
-    const modelName = modelClass.name;
-    if (mongoose.models[modelName]) return mongoose.models[modelName];
-    const schema = new mongoose.Schema(modelClass.getSchema(), { collection: modelClass.collection });
-    return mongoose.model(modelName, schema);
-  };
-
-  const Document = buildModel(DocumentClass);
-  const Bundle = buildModel(BundleClass);
-
-  const document = await Document.findOne({ _id: documentId, bundleId }).lean();
-  if (!document) {
-    const err = new Error('Document không tồn tại trong bundle này');
-    err.status = constants.HTTP_STATUS.NOT_FOUND;
-    throw err;
-  }
-
-  // Xoá document
-  await Document.findByIdAndDelete(documentId);
-
-  // Cập nhật bundle (đếm lại số documents)
-  const remainingCount = await Document.countDocuments({ bundleId });
-
   return res.status(constants.HTTP_STATUS.OK).json({
     success: true,
     errorCode: 0,
     message: 'Đã xoá chứng từ khỏi bundle',
-    data: {
-      bundle: {
-        _id: bundleId,
-        documentCount: remainingCount
-      },
-      deletedDocumentId: documentId
-    }
+    data: result
   });
 });
 
 /**
  * Retry extraction khi có lỗi
+ * POST /api/v1/co/lohang/:id/retry-extraction
  */
-const retryExtraction = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const result = await coProcessHandle.retryExtraction(id);
-    
-    res.status(constants.HTTP_STATUS.OK).json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Retry extraction error:', error);
-    res.status(error.status || constants.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
+const retryExtraction = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const result = await coProcessHandle.retryExtraction(id);
+  
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    data: result
+  });
+});
 
 /**
  * Re-extract một bảng cụ thể với user note
  * POST /api/v1/co/lohang/:id/re-extract-table
  */
-const reExtractTable = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { tableType, userNote } = req.body;
-    
-    if (!tableType) {
-      return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: 'tableType là bắt buộc (PRODUCT, NPL, BOM)'
-      });
-    }
-
-    if (!userNote || userNote.trim() === '') {
-      return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: 'userNote là bắt buộc - vui lòng mô tả vấn đề cần sửa'
-      });
-    }
-    
-    const result = await coProcessHandle.reExtractTable(id, tableType, userNote);
-    
-    res.status(constants.HTTP_STATUS.OK).json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Re-extract table error:', error);
-    res.status(error.status || constants.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: error.message
-    });
+const reExtractTable = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { tableType, userNote } = req.body;
+  
+  if (!tableType) {
+    const err = new Error('tableType là bắt buộc (PRODUCT, NPL, BOM)');
+    err.status = constants.HTTP_STATUS.BAD_REQUEST;
+    throw err;
   }
-};
+
+  if (!userNote || userNote.trim() === '') {
+    const err = new Error('userNote là bắt buộc - vui lòng mô tả vấn đề cần sửa');
+    err.status = constants.HTTP_STATUS.BAD_REQUEST;
+    throw err;
+  }
+  
+  const result = await coProcessHandle.reExtractTable(id, tableType, userNote);
+  
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    data: result
+  });
+});
 
 /**
  * Continue to next step - TỔNG HỢP TẤT CẢ
  * POST /api/v1/co/lohang/:id/continue
  * Body: { formType, exchangeRate, criterionType, tables } (tùy bước)
  */
-const continueToNextStep = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const payload = req.body; // Nhận data từ FE
-    
-    const result = await coProcessHandle.continueToNextStep(id, payload);
-    
-    res.status(constants.HTTP_STATUS.OK).json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Continue to next step error:', error);
-    res.status(error.status || constants.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
+const continueToNextStep = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const payload = req.body;
+  
+  const result = await coProcessHandle.continueToNextStep(id, payload);
+  
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    data: result
+  });
+});
 
 /**
  * Setup Form + Trigger Extract cùng lúc (Tối ưu UX)
  * POST /api/v1/co/lohang/:id/setup-and-extract
  */
-const setupAndExtract = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { formType, criterionType } = req.body;
-    
-    // Validation: Chỉ hỗ trợ FORM_E + CTH
-    if (formType !== 'FORM_E' || criterionType !== 'CTH') {
-      return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        errorCode: 1,
-        message: `Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`,
-        supportedCombinations: [
-          { formType: 'FORM_E', criterionType: 'CTH', status: 'supported' }
-        ]
-      });
-    }
-    
-    const result = await coProcessHandle.setupAndExtract(id, {
-      formType,
-      criterionType
-    });
-    
-    res.status(constants.HTTP_STATUS.OK).json({
-      success: true,
-      data: result
-    });
-  } catch (error) {
-    console.error('Setup and extract error:', error);
-    res.status(error.status || constants.HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      success: false,
-      message: error.message
-    });
+const setupAndExtract = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { formType, criterionType } = req.body;
+  
+  // Validation: Chỉ hỗ trợ FORM_E + CTH
+  if (formType !== 'FORM_E' || criterionType !== 'CTH') {
+    const err = new Error(`Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`);
+    err.status = constants.HTTP_STATUS.BAD_REQUEST;
+    err.errorCode = 1;
+    err.supportedCombinations = [{ formType: 'FORM_E', criterionType: 'CTH', status: 'supported' }];
+    throw err;
   }
-};
+  
+  const result = await coProcessHandle.setupAndExtract(id, { formType, criterionType });
+  
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    data: result
+  });
+});
 
 /**
  * Tính toán tiêu hao và phân bổ FIFO (Bước 4)
