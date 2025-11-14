@@ -150,33 +150,37 @@ class CTHTemplate extends BaseTemplate {
     row++;
 
     // Header tầng 2 - Sub-headers của nhóm "Nhu cầu nguyên liệu"
+    // Merge "Trị giá (USD)" cho 2 cột (CÓ XX + KHÔNG CÓ XX)
+    worksheet.mergeCells(row, 7, row, 8);
+    
     const subHeaders2 = [
-      '', '', '', '', '',
-      'Đơn giá (CIF)', 'Trị giá (USD)', 'Trị giá (USD)',
-      '', '', '', '', ''
+      { col: 1, text: '', span: 1 },
+      { col: 2, text: '', span: 1 },
+      { col: 3, text: '', span: 1 },
+      { col: 4, text: '', span: 1 },
+      { col: 5, text: '', span: 1 },
+      { col: 6, text: 'Đơn giá (CIF)', span: 1 },
+      { col: 7, text: 'Trị giá (USD)', span: 2 },
+      { col: 9, text: '', span: 1 },
+      { col: 10, text: '', span: 1 },
+      { col: 11, text: '', span: 1 },
+      { col: 12, text: '', span: 1 },
+      { col: 13, text: '', span: 1 }
     ];
 
-    subHeaders2.forEach((header, index) => {
-      if (header) {
-        const cell = worksheet.getCell(row, index + 1);
-        cell.value = header;
+    subHeaders2.forEach((header) => {
+      const cell = worksheet.getCell(row, header.col);
+      if (header.text) {
+        cell.value = header.text;
         cell.font = { name: 'Times New Roman', size: 8, bold: true };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
-        };
-      } else {
-        const cell = worksheet.getCell(row, index + 1);
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
-        };
       }
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
     });
     worksheet.getRow(row).height = 20;
     row++;
