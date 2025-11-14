@@ -41,44 +41,38 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Tạo bảng nguyên liệu CTH theo đúng format ảnh - đơn giản, rõ ràng
+   * Tạo bảng nguyên liệu CTH - Compact, chỉ nội dung cần thiết
    */
   addCTHMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Tạo header đơn giản theo ảnh - 14 cột
+    // Header - 8 cột chính
     const headers = [
       'STT',
       'Tên nguyên liệu', 
       'Mã HS',
       'Đơn vị tính',
-      'Định mức/ sản phẩm kế toán có hàm lượng',
-      'Tổng lượng NPL sử dụng',
-      'Đơn giá (CIF)',
+      'Số lượng',
+      'Đơn giá (USD)',
       'Trị giá (USD)',
-      'CÓ XX KHÔNG CÓ XX',
-      'Nước xuất xứ',
-      'Số',
-      'Ngày', 
-      'Số',
-      'ngày'
+      'Xuất xứ'
     ];
 
-    // Tạo header row đơn giản
+    // Tạo header row
     headers.forEach((header, index) => {
       const cell = worksheet.getCell(row, index + 1);
       cell.value = header;
-      cell.font = { name: 'Times New Roman', size: 9, bold: true };
+      cell.font = { name: 'Times New Roman', size: 10, bold: true };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
     });
-    worksheet.getRow(row).height = 40;
+    worksheet.getRow(row).height = 25;
     row++;
 
-    // Data rows - 14 cột theo ảnh, đơn giản không màu
+    // Data rows - 8 cột, compact
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
       const rowData = [
@@ -86,16 +80,10 @@ class CTHTemplate extends BaseTemplate {
         npl.tenNguyenLieu || '', // Tên nguyên liệu
         npl.maHS || '', // Mã HS
         npl.donViTinh || '', // Đơn vị tính
-        npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '0.02724388', // Định mức với 8 số thập phân
-        npl.tongLuongSuDung ? npl.tongLuongSuDung.toFixed(8) : '0.38144362', // Tổng lượng với 8 số thập phân
-        npl.donGiaCIF || '196.152', // Đơn giá CIF
-        (npl.triGia || 74.82).toFixed(2), // Trị giá USD
-        'KHÔNG CÓ XX', // CÓ XX / KHÔNG CÓ XX
-        npl.nuocXuatXu || 'MUA VN KRXX', // Nước xuất xứ
-        npl.soHoaDon || '0000197', // Số hóa đơn
-        npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '30/06/2025', // Ngày
-        npl.soChungNhan || '79', // Số chứng nhận
-        npl.ngayChungNhan ? new Date(npl.ngayChungNhan).toLocaleDateString('vi-VN') : '30/06/2025' // Ngày chứng nhận
+        npl.tongLuongSuDung ? npl.tongLuongSuDung.toFixed(4) : '', // Số lượng
+        npl.donGiaUsd ? npl.donGiaUsd.toFixed(2) : '', // Đơn giá USD
+        npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá USD
+        npl.xuatXu || '' // Xuất xứ
       ];
 
       rowData.forEach((data, colIndex) => {
@@ -112,47 +100,43 @@ class CTHTemplate extends BaseTemplate {
           bottom: { style: 'thin' }, right: { style: 'thin' }
         };
         
-        // Format số cho các cột số - giữ nguyên format từ ảnh
-        if ([4, 5].includes(colIndex)) {
-          cell.numFmt = '0.00000000'; // 8 số thập phân
-        } else if (colIndex === 6) {
-          cell.numFmt = '0.000'; // 3 số thập phân cho đơn giá
-        } else if (colIndex === 7) {
-          cell.numFmt = '0.00'; // 2 số thập phân cho trị giá
+        // Format số
+        if ([4, 5, 6].includes(colIndex)) {
+          cell.numFmt = '0.00';
         }
       });
 
-      totalValue += (npl.triGia || 74.82);
+      if (npl.triGia) totalValue += npl.triGia;
       worksheet.getRow(row).height = 18;
       row++;
     });
 
-    // Total row đơn giản theo ảnh
-    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', ''];
+    // Total row
+    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValue.toFixed(2), ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
-      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 7 };
+      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 6 };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
         top: { style: 'thin' }, left: { style: 'thin' },
         bottom: { style: 'thin' }, right: { style: 'thin' }
       };
       
-      if (colIndex === 7) {
+      if (colIndex === 6) {
         cell.numFmt = '0.00';
       }
     });
 
     worksheet.getRow(row).height = 18;
 
-    // Set column widths theo ảnh
-    const columnWidths = [5, 25, 12, 8, 12, 12, 10, 12, 15, 15, 8, 10, 8, 10];
+    // Set column widths - compact
+    const columnWidths = [5, 25, 12, 8, 12, 12, 12, 15];
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
     });
 
-    return row + 3;
+    return row + 2;
   }
 }
 
