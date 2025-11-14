@@ -153,10 +153,14 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 25;
     row++;
 
-    // Header tầng 2 - Sub-headers
+    // Header tầng 2 - Sub-headers  
     const secondHeaders = [
       { col: 6, span: 1, rowspan: 2, text: 'Đơn giá (CIF)' },
-      { col: 7, span: 2, rowspan: 1, text: 'Trị giá (USD)' },
+      { col: 7, span: 2, rowspan: 1, text: 'Trị giá (USD)' }
+    ];
+    
+    // Thêm các header cho cột Số/Ngày (không merge với các cột khác)
+    const additionalHeaders = [
       { col: 10, span: 1, text: 'Số' },
       { col: 11, span: 1, text: 'Ngày' },
       { col: 12, span: 1, text: 'Số' },
@@ -182,6 +186,21 @@ class CTHTemplate extends BaseTemplate {
         right: { style: 'thin' }
       };
     });
+    
+    // Vẽ additional headers (Số/Ngày cho 2 nhóm cuối)
+    additionalHeaders.forEach((header) => {
+      const cell = worksheet.getCell(row, header.col);
+      cell.value = header.text;
+      cell.font = { name: 'Times New Roman', size: 8, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+    
     worksheet.getRow(row).height = 20;
     row++;
 
@@ -253,12 +272,31 @@ class CTHTemplate extends BaseTemplate {
       row++;
     });
 
+    // Tính tổng riêng cho CÓ XX và KHÔNG CÓ XX
+    let totalCoXX = 0;
+    let totalKhongCoXX = 0;
+    nplDetails.forEach((npl) => {
+      if (npl.triGia) {
+        if (npl.xuatXu) {
+          totalCoXX += npl.triGia;
+        } else {
+          totalKhongCoXX += npl.triGia;
+        }
+      }
+    });
+
     // Total row - 13 cột
-    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', ''];
+    const totalRowData = [
+      '', 'Cộng:', '', '', '', '', 
+      totalCoXX > 0 ? totalCoXX.toFixed(2) : '', // CÓ XX
+      totalKhongCoXX > 0 ? totalKhongCoXX.toFixed(2) : '', // KHÔNG CÓ XX
+      '', '', '', '', ''
+    ];
+    
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
-      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 6 };
+      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 6 || colIndex === 7 };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
         top: { style: 'thin' },
@@ -311,19 +349,28 @@ class CTHTemplate extends BaseTemplate {
     dateCell.font = { name: 'Times New Roman', size: 9 };
     dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(row).height = 16;
-    row += 3;
+    row += 2;
 
-    // Người đại diện (dưới)
-    worksheet.mergeCells(`J${row}:N${row}`);
-    const repCell = worksheet.getCell(`J${row}`);
-    repCell.value = 'Người đại diện theo pháp luật thương nhân';
-    repCell.font = { name: 'Times New Roman', size: 9 };
-    repCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    // Người đại diện (đầu tiên - ở trên)
+    worksheet.mergeCells(`J${row}:M${row}`);
+    const repCell1 = worksheet.getCell(`J${row}`);
+    repCell1.value = 'Người đại diện theo pháp luật thương nhân';
+    repCell1.font = { name: 'Times New Roman', size: 9 };
+    repCell1.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(row).height = 16;
+    row += 1;
+
+    // Người đại diện (thứ hai - ở dưới)
+    worksheet.mergeCells(`J${row}:M${row}`);
+    const repCell2 = worksheet.getCell(`J${row}`);
+    repCell2.value = 'Người đại diện theo pháp luật thương nhân';
+    repCell2.font = { name: 'Times New Roman', size: 9 };
+    repCell2.alignment = { horizontal: 'center', vertical: 'middle' };
     worksheet.getRow(row).height = 16;
     row += 2;
 
     // Chữ ký và dấu
-    worksheet.mergeCells(`J${row}:N${row}`);
+    worksheet.mergeCells(`J${row}:M${row}`);
     const signCell = worksheet.getCell(`J${row}`);
     signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
     signCell.font = { name: 'Times New Roman', size: 9, italic: true };
