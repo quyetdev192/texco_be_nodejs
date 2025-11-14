@@ -219,21 +219,74 @@ class ReportGeneratorService {
     
     console.log(`📊 Generating ${criterionType} report for SKU: ${product.skuCode}`);
 
-    // 1. Kiểm tra template có được hỗ trợ không
-    if (!TemplateFactory.isSupported(criterionType)) {
-      throw new Error(`Template cho tiêu chí ${criterionType} chưa được triển khai`);
-    }
-
-    // 2. Tính toán dữ liệu cho SKU này
-    const skuData = this.calculateSKUData(product, data);
+    // 1. Check xem có template sẵn cho company + SKU không
+    const companyTemplate = this.checkCompanyTemplate(data.headerInfo, product);
     
-    // 3. Tạo template instance
+    let skuData;
+    if (companyTemplate && companyTemplate.productTemplates[product.skuCode]) {
+      console.log(`🎯 Using pre-defined template data for ${product.skuCode}`);
+      // Sử dụng data từ template, nhưng tính toán lại FOB loại trừ dựa trên NPL details
+      const templateProduct = companyTemplate.productTemplates[product.skuCode];
+      const nplDetails = templateProduct.nplDetails || [];
+      
+      // Tính lại chinaOriginValue từ NPL details
+      let totalNPLValue = 0;
+      let chinaOriginValue = 0;
+      
+      nplDetails.forEach(npl => {
+        const triGia = npl.triGia || 0;
+        totalNPLValue += triGia;
+        
+        // Kiểm tra nếu xuất xứ là Trung Quốc
+        if (npl.nuocXuatXu && npl.nuocXuatXu.includes('CHINA')) {
+          chinaOriginValue += triGia;
+        }
+      });
+      
+      // Tính FOB loại trừ = FOB - tổng NPL Trung Quốc
+      const fobValueUsd = templateProduct.fobValueUsd || 0;
+      const fobExcludingChina = fobValueUsd - chinaOriginValue;
+      
+      // Tính tỷ lệ CTC (%)
+      const ctcPercentage = fobValueUsd > 0 ? (fobExcludingChina / fobValueUsd) * 100 : 0;
+      
+      // Kết luận đạt tiêu chí hay không (≥ 40%)
+      const conclusion = ctcPercentage >= 40 ? `ĐẠT TIÊU CHÍ ${criterionType}` : `KHÔNG ĐẠT TIÊU CHÍ ${criterionType}`;
+      
+      skuData = {
+        product: {
+          ...product,
+          ...templateProduct,
+          skuCode: product.skuCode, // Giữ nguyên SKU từ request
+          fobValueUsd: fobValueUsd,
+          fobExcludingChina: fobExcludingChina
+        },
+        nplDetails: nplDetails,
+        totalNPLValue: totalNPLValue,
+        chinaOriginValue: chinaOriginValue,
+        fobExcludingChina: fobExcludingChina,
+        ctcPercentage: ctcPercentage,
+        conclusion: conclusion,
+        exchangeRate: templateProduct.exchangeRate || data.lohangDraft.exchangeRate || 25000
+      };
+    } else {
+      console.log(`🔄 Using dynamic calculation for ${product.skuCode}`);
+      // 2. Kiểm tra template có được hỗ trợ không
+      if (!TemplateFactory.isSupported(criterionType)) {
+        throw new Error(`Template cho tiêu chí ${criterionType} chưa được triển khai`);
+      }
+
+      // 3. Tính toán dữ liệu cho SKU này
+      skuData = this.calculateSKUData(product, data);
+    }
+    
+    // 4. Tạo template instance
     const template = TemplateFactory.createTemplate(criterionType, formType);
     
-    // 4. Tạo Excel workbook
+    // 5. Tạo Excel workbook
     const workbook = await template.createWorkbook(skuData, data.headerInfo, data.lohangDraft);
 
-    // 5. Tạo Excel buffer và upload
+    // 6. Tạo Excel buffer và upload
     const fileName = template.getFileName(product.skuCode);
     let excelUrl, publicId;
     
@@ -473,14 +526,14 @@ class ReportGeneratorService {
     row++;
     worksheet.getCell(`H${row}`).value = 'Trị giá FOB:';
     worksheet.getCell(`I${row}`).value = `${product.fobValueUsd} USD`;
-    
+
+    // Thêm 3 dòng trống để người dùng tự điền:
+    // 1. Trị giá FOB loại trừ
+    // 2. NL NK từ TQ
+    // 3. Tỷ giá (USD)
     row++;
-    worksheet.getCell(`H${row}`).value = 'Trị giá FOB loại trừ NL NK từ TQ:';
-    worksheet.getCell(`I${row}`).value = `${skuData.fobExcludingChina.toFixed(2)} USD`;
-    
     row++;
-    worksheet.getCell(`H${row}`).value = 'Tỷ giá (USD):';
-    worksheet.getCell(`I${row}`).value = `${headerInfo.exchangeRate} (VND/USD)`;
+    row++;
 
     return row + 2;
   }
@@ -490,56 +543,98 @@ class ReportGeneratorService {
    */
   createNPLDetailTable(worksheet, skuData) {
     const startRow = 15;
-    
-    // Headers
-    const headers = [
-      'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính',
-      'Định mức / sản phẩm (cả hao hụt)', 'Tổng lượng NPL sử dụng',
-      'Đơn giá', 'Trị giá (USD)', 'Nước xuất xứ',
-      'Tờ khai hải quan nhập khẩu / Hóa đơn mua hàng', 'Số', 'ngày'
-    ];
+    const isTemplateMode = skuData.nplDetails.some(npl => npl.hasXx !== undefined);
 
-    headers.forEach((header, index) => {
-      const cell = worksheet.getCell(startRow, index + 1);
-      cell.value = header;
-      cell.font = { bold: true };
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' }
-      };
-    });
+    // Headers
+    let headers;
+    if (isTemplateMode) {
+      headers = [
+        'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính',
+        'Định mức / sản phẩm (cả hao hụt)', 'Tổng lượng NPL sử dụng',
+        'Đơn giá (CIF)', { header: 'Trị giá (USD)', columns: ['CÓ XX', 'KHÔNG CÓ XX'] },
+        'Nước xuất xứ', 'Tờ khai hải quan nhập khẩu / Hóa đơn mua hàng', 'Số', 'Ngày'
+      ];
+    } else {
+      headers = [
+        'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính',
+        'Định mức / sản phẩm (cả hao hụt)', 'Tổng lượng NPL sử dụng',
+        'Đơn giá', 'Trị giá (USD)', 'Nước xuất xứ',
+        'Tờ khai hải quan nhập khẩu / Hóa đơn mua hàng', 'Số', 'Ngày'
+      ];
+    }
+
+    let colIdx = 1;
+    worksheet.getRow(startRow).font = { bold: true };
+    worksheet.getRow(startRow + 1).font = { bold: true };
+
+    for (const header of headers) {
+      if (typeof header === 'object') {
+        worksheet.mergeCells(startRow, colIdx, startRow, colIdx + header.columns.length - 1);
+        const mergedCell = worksheet.getCell(startRow, colIdx);
+        mergedCell.value = header.header;
+        mergedCell.alignment = { horizontal: 'center' };
+        header.columns.forEach((subHeader, subIdx) => {
+          const cell = worksheet.getCell(startRow + 1, colIdx + subIdx);
+          cell.value = subHeader;
+          cell.alignment = { horizontal: 'center' };
+        });
+        colIdx += header.columns.length;
+      } else {
+        worksheet.mergeCells(startRow, colIdx, startRow + 1, colIdx);
+        const cell = worksheet.getCell(startRow, colIdx);
+        cell.value = header;
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        colIdx++;
+      }
+    }
 
     // Data rows
-    let currentRow = startRow + 1;
-    skuData.nplDetails.forEach(npl => {
-      worksheet.getCell(currentRow, 1).value = npl.stt;
-      worksheet.getCell(currentRow, 2).value = npl.tenNguyenLieu;
-      worksheet.getCell(currentRow, 3).value = npl.maHS;
-      worksheet.getCell(currentRow, 4).value = npl.donViTinh;
-      worksheet.getCell(currentRow, 5).value = npl.dinhMuc;
-      worksheet.getCell(currentRow, 6).value = npl.tongLuongSuDung;
-      worksheet.getCell(currentRow, 7).value = npl.donGiaCIF;
-      worksheet.getCell(currentRow, 8).value = npl.triGia.toFixed(2);
-      worksheet.getCell(currentRow, 9).value = npl.nuocXuatXu;
-      worksheet.getCell(currentRow, 10).value = npl.soHoaDon;
-      worksheet.getCell(currentRow, 11).value = npl.ngayHoaDon ? npl.ngayHoaDon.toLocaleDateString('vi-VN') : '';
+    let currentRow = startRow + 2;
+    let totalCoXx = 0;
+    let totalKhongXx = 0;
 
-      // Add borders
-      for (let col = 1; col <= 12; col++) {
-        worksheet.getCell(currentRow, col).border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
-        };
+    skuData.nplDetails.forEach(npl => {
+      let dataCol = 1;
+      worksheet.getCell(currentRow, dataCol++).value = npl.stt;
+      worksheet.getCell(currentRow, dataCol++).value = npl.tenNguyenLieu;
+      worksheet.getCell(currentRow, dataCol++).value = npl.maHS;
+      worksheet.getCell(currentRow, dataCol++).value = npl.donViTinh;
+      worksheet.getCell(currentRow, dataCol++).value = npl.dinhMuc;
+      worksheet.getCell(currentRow, dataCol++).value = npl.tongLuongSuDung;
+      worksheet.getCell(currentRow, dataCol++).value = npl.donGiaCIF;
+
+      if (isTemplateMode) {
+        if (npl.hasXx) {
+          worksheet.getCell(currentRow, dataCol).value = npl.triGia.toFixed(2);
+          totalCoXx += npl.triGia;
+        } else {
+          worksheet.getCell(currentRow, dataCol + 1).value = npl.triGia.toFixed(2);
+          totalKhongXx += npl.triGia;
+        }
+        dataCol += 2; // Move past both XX columns
+      } else {
+        worksheet.getCell(currentRow, dataCol++).value = npl.triGia.toFixed(2);
       }
-      
+
+      worksheet.getCell(currentRow, dataCol++).value = npl.nuocXuatXu;
+      worksheet.getCell(currentRow, dataCol++).value = npl.soHoaDon;
+      worksheet.getCell(currentRow, dataCol++).value = npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '';
       currentRow++;
     });
 
-    return currentRow;
+    // Total row
+    const totalRow = worksheet.getRow(currentRow);
+    totalRow.font = { bold: true };
+    if (isTemplateMode) {
+      worksheet.getCell(currentRow, 7).value = 'Cộng:';
+      worksheet.getCell(currentRow, 8).value = totalCoXx > 0 ? totalCoXx.toFixed(2) : '';
+      worksheet.getCell(currentRow, 9).value = totalKhongXx > 0 ? totalKhongXx.toFixed(2) : '';
+    } else {
+      worksheet.getCell(currentRow, 7).value = 'Cộng:';
+      worksheet.getCell(currentRow, 8).value = skuData.totalNPLValue.toFixed(2);
+    }
+
+    return currentRow + 1;
   }
 
   /**
@@ -586,6 +681,41 @@ class ReportGeneratorService {
     } catch (error) {
       console.warn('Date formatting error:', error);
       return 'ngày 12 tháng 07 năm 2025';
+    }
+  }
+
+  /**
+   * Check xem có template sẵn cho company + SKU không
+   */
+  checkCompanyTemplate(headerInfo, product) {
+    try {
+      const taxCode = headerInfo.taxCode;
+      const skuCode = product.skuCode;
+      
+      if (!taxCode || !skuCode) return null;
+      
+      // Tìm file template theo taxCode
+      const templatesDir = path.join(__dirname, '../../data/templates/company-templates');
+      if (!fs.existsSync(templatesDir)) return null;
+      
+      const files = fs.readdirSync(templatesDir);
+      const templateFile = files.find(file => file.includes(taxCode) && file.endsWith('.json'));
+      
+      if (!templateFile) return null;
+      
+      const templatePath = path.join(templatesDir, templateFile);
+      const templateData = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
+      
+      // Check xem có support SKU này không
+      if (!templateData.matchingCriteria?.supportedSkus?.includes(skuCode)) return null;
+      if (templateData.matchingCriteria?.taxCode !== taxCode) return null;
+      
+      console.log(`✅ Found company template for ${taxCode} - SKU ${skuCode}`);
+      return templateData;
+      
+    } catch (error) {
+      console.log(`⚠️ Error checking company template:`, error.message);
+      return null;
     }
   }
 

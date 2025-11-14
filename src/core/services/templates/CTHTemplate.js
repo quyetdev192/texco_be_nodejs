@@ -40,7 +40,7 @@ class CTHTemplate extends BaseTemplate {
 
     // 3. Thông tin công ty (2 cột)
     this.addCompanyInfoCompact(worksheet, currentRow, headerInfo, skuData);
-    currentRow += 5;
+    currentRow += 9;
 
     // 4. Bảng nguyên liệu chính (theo ảnh)
     currentRow = this.addMainMaterialTable(worksheet, currentRow, skuData.nplDetails);
@@ -102,13 +102,21 @@ class CTHTemplate extends BaseTemplate {
 
     worksheet.getCell(`H${productRow + 4}`).value = 'Trị giá FOB:';
     worksheet.getCell(`H${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 4}`).value = skuData.product?.fobValue ? `${skuData.product.fobValue} USD` : '';
+    worksheet.getCell(`I${productRow + 4}`).value = skuData.product?.fobValueUsd ? `${skuData.product.fobValueUsd} USD` : '';
     worksheet.getCell(`I${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
 
     worksheet.getCell(`H${productRow + 5}`).value = 'Trị giá FOB loại trừ:';
     worksheet.getCell(`H${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 5}`).value = skuData.product?.fobExcluding ? `${skuData.product.fobExcluding} USD` : '';
+    worksheet.getCell(`I${productRow + 5}`).value = skuData.product?.fobExcludingChina !== undefined ? `${skuData.product.fobExcludingChina} USD` : '';
     worksheet.getCell(`I${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
+
+    worksheet.getCell(`H${productRow + 6}`).value = 'Tỷ giá (USD):';
+    worksheet.getCell(`H${productRow + 6}`).font = { name: 'Times New Roman', size: 10 };
+
+    worksheet.mergeCells(`I${productRow + 6}:N${productRow + 6}`);
+    worksheet.getCell(`I${productRow + 6}`).value = `${skuData.product?.exchangeRate || '26,005'} (VND/USD)`;
+    worksheet.getCell(`I${productRow + 6}`).font = { name: 'Times New Roman', size: 10 };
+
   }
 
   /**

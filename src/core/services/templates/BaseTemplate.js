@@ -153,14 +153,6 @@ class BaseTemplate {
     worksheet.getCell(`H${row}`).value = `${product.fobValueUsd || '1,703.94'} USD`;
     worksheet.getCell(`H${row}`).font = { name: 'Times New Roman', size: 10 };
     row++;
-
-    // Row 4: Tỷ giá
-    worksheet.getCell(`A${row}`).value = 'Tỷ giá (USD):';
-    worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.mergeCells(`B${row}:N${row}`);
-    worksheet.getCell(`B${row}`).value = '26,005 (VND/USD)';
-    worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
-
     return row + 3;
   }
 

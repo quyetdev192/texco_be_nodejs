@@ -123,7 +123,9 @@ class SecurityConfig {
             'https://texco-web-dashboard.vercel.app',
             'https://texco-web-dashboard-staging.vercel.app',
             'https://devphanmem.site',
+            'https://www.devphanmem.site',
             'http://devphanmem.site',
+            'http://www.devphanmem.site',
             'http://localhost:5173',
             'http://localhost:5174'
         ];
