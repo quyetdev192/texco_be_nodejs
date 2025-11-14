@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const constants = require('../../core/utils/constants');
 const CTCReportGeneratorService = require('../../core/services/ReportGenerator.service');
+const { v2: cloudinary } = require('cloudinary');
+const axios = require('axios');
 
 // Import models
 const LohangDraftClass = require('../models/lohangDraft.model');
@@ -252,11 +254,48 @@ function getStepKey(step) {
   return stepMap[step];
 }
 
+/**
+ * Download Excel report từ Cloudinary
+ */
+async function downloadExcelReport(publicId) {
+  try {
+    // Lấy URL của file từ Cloudinary
+    const resource = await cloudinary.api.resource(publicId, {
+      resource_type: 'raw'
+    });
+
+    if (!resource || !resource.secure_url) {
+      const err = new Error('Không tìm thấy file trên Cloudinary');
+      err.status = constants.HTTP_STATUS.NOT_FOUND;
+      throw err;
+    }
+
+    // Download file từ Cloudinary URL
+    const response = await axios.get(resource.secure_url, {
+      responseType: 'arraybuffer'
+    });
+
+    // Lấy tên file từ metadata hoặc public_id
+    const fileName = resource.metadata?.filename || `${publicId}.xlsx`;
+
+    return {
+      buffer: response.data,
+      fileName: fileName
+    };
+  } catch (error) {
+    if (error.status) throw error;
+    const err = new Error(`Lỗi download file: ${error.message}`);
+    err.status = constants.HTTP_STATUS.INTERNAL_SERVER_ERROR;
+    throw err;
+  }
+}
+
 module.exports = {
   generateCTCReports,
   getCTCReports,
   retryCTCReports,
   deleteCTCReport,
   completeCOProcess,
-  backToStep
+  backToStep,
+  downloadExcelReport
 };

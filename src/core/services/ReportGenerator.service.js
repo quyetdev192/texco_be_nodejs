@@ -107,11 +107,19 @@ class ReportGeneratorService {
     try {
       const uploadOptions = {
         resource_type: 'raw',
+        type: 'upload',
         public_id: options.public_id || `report_${Date.now()}`,
         folder: options.folder || 'reports',
         use_filename: true,
         unique_filename: false,
-        overwrite: true
+        overwrite: true,
+        // Set MIME type để browser nhận diện đúng file type
+        mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        // Thêm metadata để Cloudinary xử lý đúng
+        metadata: {
+          filename: fileName,
+          content_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
       };
 
       const result = await cloudinary.uploader.upload(
