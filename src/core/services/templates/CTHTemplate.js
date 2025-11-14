@@ -125,7 +125,7 @@ class CTHTemplate extends BaseTemplate {
       { col: 4, span: 1, text: 'Đơn vị tính' },
       { col: 5, span: 1, text: 'Định mức / sản phẩm kế toán' },
       { col: 6, span: 2, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
-      { col: 8, span: 2, text: 'Trị giá (USD)' },
+      { col: 8, span: 2, text: 'Trị giá' },
       { col: 10, span: 1, text: 'Nước xuất xứ' },
       { col: 11, span: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
       { col: 13, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
