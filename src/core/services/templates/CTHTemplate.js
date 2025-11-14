@@ -318,18 +318,18 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 18;
     row += 2;
 
-    // Ngày lập (trên cùng)
+    // Ngày lập (bên phải)
     const today = new Date();
     const day = today.getDate();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
     const dateStr = `TP. Hồ Chí Minh, ngày ${day} tháng ${month} năm ${year}`;
 
-    worksheet.mergeCells(`A${row}:D${row}`);
-    const dateCell = worksheet.getCell(`A${row}`);
+    worksheet.mergeCells(`J${row}:M${row}`);
+    const dateCell = worksheet.getCell(`J${row}`);
     dateCell.value = dateStr;
     dateCell.font = { name: 'Times New Roman', size: 9 };
-    dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
     worksheet.getRow(row).height = 16;
     row += 2;
 
