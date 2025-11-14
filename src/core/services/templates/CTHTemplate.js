@@ -152,7 +152,7 @@ class CTHTemplate extends BaseTemplate {
     // Header tầng 2 - Sub-headers của nhóm "Nhu cầu nguyên liệu"
     const subHeaders2 = [
       '', '', '', '', '',
-      'Đơn giá (CIF)', 'Trị giá (USD)', '',
+      'Đơn giá (CIF)', 'Trị giá (USD)', 'Trị giá (USD)',
       '', '', '', '', ''
     ];
 
@@ -206,8 +206,12 @@ class CTHTemplate extends BaseTemplate {
     row++;
 
     // Data rows - 13 cột (Trị giá chia CÓ XX / KHÔNG CÓ XX)
-    let totalValue = 0;
+    let totalValueCoXX = 0;
+    let totalValueKhongCoXX = 0;
     nplDetails.forEach((npl, index) => {
+      const coXXValue = npl.xuatXu && npl.triGia ? npl.triGia : 0;
+      const khongCoXXValue = !npl.xuatXu && npl.triGia ? npl.triGia : 0;
+      
       const rowData = [
         index + 1, // STT
         npl.tenNguyenLieu || '', // Tên nguyên liệu
@@ -215,14 +219,17 @@ class CTHTemplate extends BaseTemplate {
         npl.donViTinh || '', // Đơn vị tính
         npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
         npl.donGiaCIF || '', // Đơn giá (CIF)
-        npl.xuatXu && npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá CÓ XX
-        !npl.xuatXu && npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá KHÔNG CÓ XX
+        coXXValue ? coXXValue.toFixed(2) : '', // Trị giá CÓ XX
+        khongCoXXValue ? khongCoXXValue.toFixed(2) : '', // Trị giá KHÔNG CÓ XX
         npl.xuatXu || '', // Nước xuất xứ
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
         npl.soChungNhan || '', // Số C/O
         npl.ngayChungNhan ? new Date(npl.ngayChungNhan).toLocaleDateString('vi-VN') : '' // Ngày C/O
       ];
+      
+      totalValueCoXX += coXXValue;
+      totalValueKhongCoXX += khongCoXXValue;
 
       rowData.forEach((data, colIndex) => {
         const cell = worksheet.getCell(row, colIndex + 1);
@@ -247,13 +254,12 @@ class CTHTemplate extends BaseTemplate {
         }
       });
 
-      if (npl.triGia) totalValue += npl.triGia;
       worksheet.getRow(row).height = 18;
       row++;
     });
 
-    // Total row - 13 cột (tính tổng từ cả CÓ XX và KHÔNG CÓ XX)
-    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValue.toFixed(2), totalValue.toFixed(2), '', '', '', '', ''];
+    // Total row - 13 cột (tính tổng riêng CÓ XX và KHÔNG CÓ XX)
+    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValueCoXX.toFixed(2), totalValueKhongCoXX.toFixed(2), '', '', '', '', ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
