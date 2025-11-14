@@ -132,12 +132,13 @@ class CTHTemplate extends BaseTemplate {
 
     // Vẽ header tầng 1
     mainHeaders.forEach((header) => {
-      if (header.span > 1) {
-        worksheet.mergeCells(row, header.col, row, header.col + header.span - 1);
+      // Merge cells (chọn cách merge phù hợp)
+      if (header.span > 1 || header.rowspan > 1) {
+        const endRow = row + (header.rowspan - 1);
+        const endCol = header.col + (header.span - 1);
+        worksheet.mergeCells(row, header.col, endRow, endCol);
       }
-      if (header.rowspan > 1) {
-        worksheet.mergeCells(row, header.col, row + header.rowspan - 1, header.col + header.span - 1);
-      }
+      
       const cell = worksheet.getCell(row, header.col);
       cell.value = header.text;
       cell.font = { name: 'Times New Roman', size: 9, bold: true };
@@ -163,12 +164,13 @@ class CTHTemplate extends BaseTemplate {
     ];
 
     secondHeaders.forEach((header) => {
-      if (header.span > 1) {
-        worksheet.mergeCells(row, header.col, row, header.col + header.span - 1);
+      // Merge cells (chọn cách merge phù hợp)
+      if (header.span > 1 || (header.rowspan && header.rowspan > 1)) {
+        const endRow = row + ((header.rowspan || 1) - 1);
+        const endCol = header.col + (header.span - 1);
+        worksheet.mergeCells(row, header.col, endRow, endCol);
       }
-      if (header.rowspan > 1) {
-        worksheet.mergeCells(row, header.col, row + header.rowspan - 1, header.col + header.span - 1);
-      }
+      
       const cell = worksheet.getCell(row, header.col);
       cell.value = header.text;
       cell.font = { name: 'Times New Roman', size: 8, bold: true };
