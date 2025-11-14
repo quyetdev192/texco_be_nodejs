@@ -53,7 +53,7 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Thông tin công ty - format compact 2 cột
+   * Thông tin công ty - format 2 cột + thông tin sản phẩm
    */
   addCompanyInfoCompact(worksheet, startRow, headerInfo, skuData) {
     let row = startRow;
@@ -77,7 +77,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
     row++;
 
-    // Cột phải: Thông tin sản phẩm
+    // Cột phải: Thông tin sản phẩm chi tiết
     const productRow = startRow;
     worksheet.getCell(`H${productRow}`).value = 'Tiêu chí áp dụng:';
     worksheet.getCell(`H${productRow}`).font = { name: 'Times New Roman', size: 10 };
@@ -93,6 +93,22 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getCell(`H${productRow + 2}`).font = { name: 'Times New Roman', size: 10 };
     worksheet.getCell(`I${productRow + 2}`).value = skuData.product?.hsCode || '';
     worksheet.getCell(`I${productRow + 2}`).font = { name: 'Times New Roman', size: 10 };
+
+    // Thêm thông tin sản phẩm bổ sung (hàng 4-7)
+    worksheet.getCell(`H${productRow + 3}`).value = 'Số lượng:';
+    worksheet.getCell(`H${productRow + 3}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 3}`).value = skuData.product?.quantity || '';
+    worksheet.getCell(`I${productRow + 3}`).font = { name: 'Times New Roman', size: 10 };
+
+    worksheet.getCell(`H${productRow + 4}`).value = 'Trị giá FOB:';
+    worksheet.getCell(`H${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 4}`).value = skuData.product?.fobValue ? `${skuData.product.fobValue} USD` : '';
+    worksheet.getCell(`I${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
+
+    worksheet.getCell(`H${productRow + 5}`).value = 'Trị giá FOB loại trừ:';
+    worksheet.getCell(`H${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
+    worksheet.getCell(`I${productRow + 5}`).value = skuData.product?.fobExcluding ? `${skuData.product.fobExcluding} USD` : '';
+    worksheet.getCell(`I${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
   }
 
   /**
@@ -208,17 +224,50 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Kết luận - compact
+   * Kết luận + Footer với người đại diện và ngày lập
    */
   addConclusionCompact(worksheet, startRow, skuData) {
     let row = startRow;
 
+    // Kết luận
     worksheet.mergeCells(`A${row}:N${row}`);
     const conclusionCell = worksheet.getCell(`A${row}`);
     conclusionCell.value = `Kết luận: Hàng hóa đạt tiêu chí CTH`;
     conclusionCell.font = { name: 'Times New Roman', size: 10, bold: true };
     conclusionCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(row).height = 18;
+    row += 3;
+
+    // Footer: Ngày lập + Người đại diện
+    const today = new Date();
+    const day = today.getDate();
+    const month = today.getMonth() + 1;
+    const year = today.getFullYear();
+    const dateStr = `TP. Hồ Chí Minh, ngày ${day} tháng ${month} năm ${year}`;
+
+    // Ngày lập (cột trái)
+    worksheet.mergeCells(`A${row}:C${row}`);
+    const dateCell = worksheet.getCell(`A${row}`);
+    dateCell.value = dateStr;
+    dateCell.font = { name: 'Times New Roman', size: 9 };
+    dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    // Người đại diện (cột phải)
+    worksheet.mergeCells(`J${row}:N${row}`);
+    const repCell = worksheet.getCell(`J${row}`);
+    repCell.value = 'Người đại diện theo pháp luật thương nhân';
+    repCell.font = { name: 'Times New Roman', size: 9 };
+    repCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(row).height = 16;
+    row += 3;
+
+    // Chữ ký và dấu
+    worksheet.mergeCells(`J${row}:N${row}`);
+    const signCell = worksheet.getCell(`J${row}`);
+    signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
+    signCell.font = { name: 'Times New Roman', size: 9, italic: true };
+    signCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(row).height = 14;
   }
 
 }
