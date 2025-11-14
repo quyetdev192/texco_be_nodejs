@@ -112,23 +112,22 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Bảng nguyên liệu chính - theo format ảnh (header 2 tầng)
+   * Bảng nguyên liệu chính - theo format ảnh (header 3 tầng)
    */
   addMainMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Header tầng 1 - Các nhóm cột (14 cột, xoá ghi chú)
+    // Header tầng 1 - Các nhóm cột chính
     const mainHeaders = [
       { col: 1, span: 1, text: 'STT' },
       { col: 2, span: 1, text: 'Tên nguyên liệu' },
       { col: 3, span: 1, text: 'Mã HS' },
       { col: 4, span: 1, text: 'Đơn vị tính' },
       { col: 5, span: 1, text: 'Định mức / sản phẩm kế toán' },
-      { col: 6, span: 2, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
-      { col: 8, span: 2, text: 'Trị giá' },
-      { col: 10, span: 1, text: 'Nước xuất xứ' },
-      { col: 11, span: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
-      { col: 13, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
+      { col: 6, span: 3, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
+      { col: 9, span: 1, text: 'Nước xuất xứ' },
+      { col: 10, span: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
+      { col: 12, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
     ];
 
     // Vẽ header tầng 1
@@ -150,17 +149,48 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Header tầng 2 - Sub-headers (13 cột)
-    const subHeaders = [
+    // Header tầng 2 - Sub-headers của nhóm "Nhu cầu nguyên liệu"
+    const subHeaders2 = [
+      '', '', '', '', '',
+      'Đơn giá (CIF)', 'Trị giá (USD)', '',
+      '', '', '', '', ''
+    ];
+
+    subHeaders2.forEach((header, index) => {
+      if (header) {
+        const cell = worksheet.getCell(row, index + 1);
+        cell.value = header;
+        cell.font = { name: 'Times New Roman', size: 8, bold: true };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      } else {
+        const cell = worksheet.getCell(row, index + 1);
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    });
+    worksheet.getRow(row).height = 20;
+    row++;
+
+    // Header tầng 3 - Sub-sub-headers (chi tiết)
+    const subHeaders3 = [
       'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính', 'Định mức',
-      'Đơn giá (CIF)', 'Trị giá (USD)',
-      'CÓ XX', 'KHÔNG CÓ XX',
+      'Đơn giá (CIF)', 'CÓ XX', 'KHÔNG CÓ XX',
       'Nước xuất xứ',
       'Số', 'Ngày',
       'Số', 'Ngày'
     ];
 
-    subHeaders.forEach((header, index) => {
+    subHeaders3.forEach((header, index) => {
       const cell = worksheet.getCell(row, index + 1);
       cell.value = header;
       cell.font = { name: 'Times New Roman', size: 8, bold: true };
@@ -175,7 +205,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 25;
     row++;
 
-    // Data rows - 13 cột (xoá cột Trị giá riêng)
+    // Data rows - 13 cột (Trị giá chia CÓ XX / KHÔNG CÓ XX)
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
       const rowData = [
@@ -185,9 +215,8 @@ class CTHTemplate extends BaseTemplate {
         npl.donViTinh || '', // Đơn vị tính
         npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
         npl.donGiaCIF || '', // Đơn giá (CIF)
-        npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá (USD)
-        npl.xuatXu ? 'CÓ XX' : '', // CÓ XX
-        npl.xuatXu ? '' : 'KHÔNG CÓ XX', // KHÔNG CÓ XX
+        npl.xuatXu && npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá CÓ XX
+        !npl.xuatXu && npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá KHÔNG CÓ XX
         npl.xuatXu || '', // Nước xuất xứ
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
@@ -223,12 +252,12 @@ class CTHTemplate extends BaseTemplate {
       row++;
     });
 
-    // Total row - 13 cột
-    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', ''];
+    // Total row - 13 cột (tính tổng từ cả CÓ XX và KHÔNG CÓ XX)
+    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValue.toFixed(2), totalValue.toFixed(2), '', '', '', '', ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
-      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 7 };
+      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 6 || colIndex === 7 };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
         top: { style: 'thin' },
@@ -237,7 +266,7 @@ class CTHTemplate extends BaseTemplate {
         right: { style: 'thin' }
       };
 
-      if (colIndex === 7) {
+      if ([6, 7].includes(colIndex)) {
         cell.numFmt = '0.00';
       }
     });
