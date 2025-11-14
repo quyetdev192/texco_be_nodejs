@@ -126,8 +126,8 @@ class CTHTemplate extends BaseTemplate {
       { col: 5, span: 1, rowspan: 3, text: 'Định mức / sản phẩm kế toán' },
       { col: 6, span: 3, rowspan: 1, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
       { col: 9, span: 1, rowspan: 3, text: 'Nước xuất xứ' },
-      { col: 10, span: 2, rowspan: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
-      { col: 12, span: 2, rowspan: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
+      { col: 10, span: 2, rowspan: 1, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
+      { col: 12, span: 2, rowspan: 1, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
     ];
 
     // Vẽ header tầng 1
@@ -156,15 +156,11 @@ class CTHTemplate extends BaseTemplate {
     // Header tầng 2 - Sub-headers  
     const secondHeaders = [
       { col: 6, span: 1, rowspan: 2, text: 'Đơn giá (CIF)' },
-      { col: 7, span: 2, rowspan: 1, text: 'Trị giá (USD)' }
-    ];
-    
-    // Thêm các header cho cột Số/Ngày (không merge với các cột khác)
-    const additionalHeaders = [
-      { col: 10, span: 1, text: 'Số' },
-      { col: 11, span: 1, text: 'Ngày' },
-      { col: 12, span: 1, text: 'Số' },
-      { col: 13, span: 1, text: 'Ngày' }
+      { col: 7, span: 2, rowspan: 1, text: 'Trị giá (USD)' },
+      { col: 10, span: 1, rowspan: 2, text: 'Số' },
+      { col: 11, span: 1, rowspan: 2, text: 'Ngày' },
+      { col: 12, span: 1, rowspan: 2, text: 'Số' },
+      { col: 13, span: 1, rowspan: 2, text: 'Ngày' }
     ];
 
     secondHeaders.forEach((header) => {
@@ -175,20 +171,6 @@ class CTHTemplate extends BaseTemplate {
         worksheet.mergeCells(row, header.col, endRow, endCol);
       }
       
-      const cell = worksheet.getCell(row, header.col);
-      cell.value = header.text;
-      cell.font = { name: 'Times New Roman', size: 8, bold: true };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' }
-      };
-    });
-    
-    // Vẽ additional headers (Số/Ngày cho 2 nhóm cuối)
-    additionalHeaders.forEach((header) => {
       const cell = worksheet.getCell(row, header.col);
       cell.value = header.text;
       cell.font = { name: 'Times New Roman', size: 8, bold: true };
@@ -350,15 +332,6 @@ class CTHTemplate extends BaseTemplate {
     dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(row).height = 16;
     row += 2;
-
-    // Người đại diện (đầu tiên - ở trên)
-    worksheet.mergeCells(`J${row}:M${row}`);
-    const repCell1 = worksheet.getCell(`J${row}`);
-    repCell1.value = 'Người đại diện theo pháp luật thương nhân';
-    repCell1.font = { name: 'Times New Roman', size: 9 };
-    repCell1.alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(row).height = 16;
-    row += 1;
 
     // Người đại diện (thứ hai - ở dưới)
     worksheet.mergeCells(`J${row}:M${row}`);
