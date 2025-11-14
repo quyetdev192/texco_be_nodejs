@@ -245,7 +245,7 @@ class ReportGeneratorService {
       console.log('☁️ Uploading Excel to Cloudinary...');
       const uploadResult = await this.uploadExcelToCloudinary(excelBuffer, fileName, {
         folder: 'reports',
-        public_id: `${criterionType.toLowerCase()}_${product.skuCode}_${Date.now()}`
+        public_id: `${criterionType.toLowerCase()}_${product.skuCode}_${Date.now()}.xlsx`
       });
       
       excelUrl = uploadResult.secure_url;
