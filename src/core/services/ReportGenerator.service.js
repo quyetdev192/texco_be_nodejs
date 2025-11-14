@@ -32,18 +32,16 @@ const Company = buildModel(CompanyClass);
 
 class ReportGeneratorService {
   constructor() {
-    // Sử dụng Cloudinary nếu có CLOUDINARY_URL
-    this.useCloudinary = !!process.env.CLOUDINARY_URL;
+    // Luôn sử dụng Cloudinary để upload Excel reports
+    this.useCloudinary = true;
     
-    if (this.useCloudinary) {
-      // Cấu hình Cloudinary SDK với CLOUDINARY_URL
+    // Cấu hình Cloudinary SDK
+    if (process.env.CLOUDINARY_URL) {
       cloudinary.config({
         cloudinary_url: process.env.CLOUDINARY_URL
       });
-      console.log('☁️ Using Cloudinary SDK for Excel reports');
-    } else {
-      console.log('📁 Using local file storage for Excel reports');
     }
+    console.log('☁️ Using Cloudinary SDK for Excel reports');
     
     // Initialize header extractor
     this.headerExtractor = new CTCHeaderExtractorService();
