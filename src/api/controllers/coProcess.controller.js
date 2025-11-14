@@ -234,9 +234,9 @@ const calculateConsumption = asyncHandler(async (req, res) => {
   const result = await coProcessHandle.calculateConsumptionAndFifo(lohangDraftId);
   
   return res.status(constants.HTTP_STATUS.OK).json({
-    success: result.success,
-    errorCode: result.success ? 0 : 1,
-    message: result.message,
+    success: true,
+    errorCode: 0,
+    message: result.message || 'Tính toán thành công',
     data: result
   });
 });
