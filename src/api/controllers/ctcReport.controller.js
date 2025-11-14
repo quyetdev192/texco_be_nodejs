@@ -134,10 +134,14 @@ const downloadExcelReport = asyncHandler(async (req, res) => {
 
   const result = await ctcReportHandle.downloadExcelReport(publicId);
 
+  // Đảm bảo filename có extension .xlsx
+  const fileName = result.fileName.endsWith('.xlsx') ? result.fileName : `${result.fileName}.xlsx`;
+
   // Set headers để browser tải về đúng file Excel
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Content-Length', result.buffer.length);
 
   return res.status(constants.HTTP_STATUS.OK).send(result.buffer);
 });

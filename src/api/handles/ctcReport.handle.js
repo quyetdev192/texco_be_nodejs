@@ -275,13 +275,18 @@ async function downloadExcelReport(publicId) {
       responseType: 'arraybuffer'
     });
 
-    // Lấy tên file từ public_id hoặc filename
-    const fileName = resource.public_id?.split('/').pop() || `${publicId}.xlsx`;
-    const finalFileName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
+    // Lấy tên file từ public_id
+    // public_id format: "reports/cth_SKU-1_1763086276124"
+    const fileNameFromPublicId = resource.public_id?.split('/').pop() || 'report';
+    
+    // Đảm bảo có extension .xlsx
+    const fileName = fileNameFromPublicId.endsWith('.xlsx') 
+      ? fileNameFromPublicId 
+      : `${fileNameFromPublicId}.xlsx`;
 
     return {
       buffer: response.data,
-      fileName: finalFileName
+      fileName: fileName
     };
   } catch (error) {
     if (error.status) throw error;
