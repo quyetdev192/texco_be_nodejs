@@ -177,11 +177,5 @@ router.post('/co/lohang/:lohangDraftId/back-to-step/:stepNumber',
   ctcReportController.backToStep
 );
 
-// Download Excel report từ Cloudinary với đúng MIME type
-router.get('/co/reports/download/:publicId', 
-  verifyToken, 
-  requireRole('STAFF'), 
-  ctcReportController.downloadExcelReport
-);
 
 module.exports = router;

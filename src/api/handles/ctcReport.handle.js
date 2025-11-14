@@ -254,54 +254,11 @@ function getStepKey(step) {
   return stepMap[step];
 }
 
-/**
- * Download Excel report từ Cloudinary
- */
-async function downloadExcelReport(publicId) {
-  try {
-    // Lấy URL của file từ Cloudinary
-    const resource = await cloudinary.api.resource(publicId, {
-      resource_type: 'raw'
-    });
-
-    if (!resource || !resource.secure_url) {
-      const err = new Error('Không tìm thấy file trên Cloudinary');
-      err.status = constants.HTTP_STATUS.NOT_FOUND;
-      throw err;
-    }
-
-    // Download file từ Cloudinary URL
-    const response = await axios.get(resource.secure_url, {
-      responseType: 'arraybuffer'
-    });
-
-    // Lấy tên file từ public_id
-    // public_id format: "reports/cth_SKU-1_1763086276124"
-    const fileNameFromPublicId = resource.public_id?.split('/').pop() || 'report';
-    
-    // Đảm bảo có extension .xlsx
-    const fileName = fileNameFromPublicId.endsWith('.xlsx') 
-      ? fileNameFromPublicId 
-      : `${fileNameFromPublicId}.xlsx`;
-
-    return {
-      buffer: response.data,
-      fileName: fileName
-    };
-  } catch (error) {
-    if (error.status) throw error;
-    const err = new Error(`Lỗi download file: ${error.message}`);
-    err.status = constants.HTTP_STATUS.INTERNAL_SERVER_ERROR;
-    throw err;
-  }
-}
-
 module.exports = {
   generateCTCReports,
   getCTCReports,
   retryCTCReports,
   deleteCTCReport,
   completeCOProcess,
-  backToStep,
-  downloadExcelReport
+  backToStep
 };

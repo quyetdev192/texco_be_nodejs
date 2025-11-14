@@ -119,39 +119,11 @@ const backToStep = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Download Excel report từ Cloudinary với đúng MIME type
- * GET /api/v1/co/reports/download/:publicId
- */
-const downloadExcelReport = asyncHandler(async (req, res) => {
-  const { publicId } = req.params;
-
-  if (!publicId) {
-    const err = new Error('Thiếu publicId');
-    err.status = constants.HTTP_STATUS.BAD_REQUEST;
-    throw err;
-  }
-
-  const result = await ctcReportHandle.downloadExcelReport(publicId);
-
-  // Đảm bảo filename có extension .xlsx
-  const fileName = result.fileName.endsWith('.xlsx') ? result.fileName : `${result.fileName}.xlsx`;
-
-  // Set headers để browser tải về đúng file Excel
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Content-Length', result.buffer.length);
-
-  return res.status(constants.HTTP_STATUS.OK).send(result.buffer);
-});
-
 module.exports = {
   generateCTCReports,
   getCTCReports,
   retryCTCReports,
   deleteCTCReport,
   completeCOProcess,
-  backToStep,
-  downloadExcelReport
+  backToStep
 };
