@@ -123,7 +123,9 @@ class SecurityConfig {
             'https://texco-web-dashboard.vercel.app',
             'https://texco-web-dashboard-staging.vercel.app',
             'https://devphanmem.site',
-            'http://devphanmem.site'
+            'http://devphanmem.site',
+            'http://localhost:5173',
+            'http://localhost:5174'
         ];
 
         const rawOrigin = process.env.CORS_ORIGIN || '*';

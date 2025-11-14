@@ -1128,7 +1128,8 @@ async function extractDataFromDocuments(lohangDraftId) {
 }
 
 /**
- * Retry extraction khi có lỗi
+ * Retry extraction khi có lỗi - Chỉ retry các bảng bị lỗi
+ * Nếu có nhiều bảng bị lỗi, sẽ retry từng bảng một
  */
 async function retryExtraction(lohangDraftId) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
@@ -1145,6 +1146,19 @@ async function retryExtraction(lohangDraftId) {
     throw err;
   }
 
+  // Lấy danh sách bảng bị lỗi từ extractionErrors
+  const failedTables = (lohangDraft.extractionErrors || [])
+    .map(e => e.step)
+    .filter(step => ['EXTRACT_PRODUCT_TABLE', 'EXTRACT_NPL_TABLE', 'EXTRACT_BOM_TABLE'].includes(step));
+
+  if (failedTables.length === 0) {
+    const err = new Error('Không tìm thấy bảng nào bị lỗi để retry');
+    err.status = constants.HTTP_STATUS.BAD_REQUEST;
+    throw err;
+  }
+
+  console.log(`Retrying failed tables: ${failedTables.join(', ')}`);
+
   // Reset errors và status
   await LohangDraft.findByIdAndUpdate(lohangDraftId, {
     status: 'DATA_EXTRACTING',
@@ -1152,17 +1166,229 @@ async function retryExtraction(lohangDraftId) {
     updatedAt: new Date()
   });
 
-  // Trigger extraction lại
+  // Trigger retry extraction async - chỉ retry các bảng bị lỗi
   setImmediate(() => {
-    extractDataFromDocuments(lohangDraftId)
+    retryFailedTablesExtraction(lohangDraftId, failedTables)
       .catch(err => console.error('Retry extraction error:', err));
   });
 
   return {
     _id: lohangDraftId,
     status: 'DATA_EXTRACTING',
-    message: 'Đang retry trích xuất dữ liệu'
+    message: `Đang retry trích xuất ${failedTables.length} bảng bị lỗi`,
+    failedTables: failedTables.map(step => {
+      if (step === 'EXTRACT_PRODUCT_TABLE') return 'PRODUCT';
+      if (step === 'EXTRACT_NPL_TABLE') return 'NPL';
+      if (step === 'EXTRACT_BOM_TABLE') return 'BOM';
+      return step;
+    })
   };
+}
+
+/**
+ * Retry các bảng bị lỗi (được gọi từ retryExtraction)
+ * Chỉ re-extract những bảng trong danh sách failedTables
+ */
+async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
+  const errors = [];
+  
+  try {
+    const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
+    if (!lohangDraft) return;
+
+    const documents = await Document.find({
+      _id: { $in: lohangDraft.linkedDocuments }
+    }).lean();
+
+    const extractor = getDataExtractorService();
+    const BundleClass = require('../models/bundle.model');
+    const Bundle = buildModelFromClass(BundleClass);
+
+    let bundleId = lohangDraft.linkedDocuments?.[0] 
+      ? (await Document.findById(lohangDraft.linkedDocuments[0]).lean())?.bundleId
+      : null;
+
+    if (!bundleId && documents.length > 0) {
+      bundleId = documents[0].bundleId;
+    }
+
+    console.log(`Retrying ${failedTables.length} failed tables...`);
+
+    // RETRY: EXTRACT_PRODUCT_TABLE
+    if (failedTables.includes('EXTRACT_PRODUCT_TABLE')) {
+      try {
+        console.log('Retrying PRODUCT table...');
+        const invoiceDoc = documents.find(d => d.documentType === 'COMMERCIAL_INVOICE');
+        const declarationDoc = documents.find(d => d.documentType === 'EXPORT_DECLARATION');
+
+        if (!invoiceDoc) {
+          throw new Error('Không tìm thấy Commercial Invoice');
+        }
+
+        const productTableData = await extractor.extractProductTable(
+          invoiceDoc,
+          declarationDoc,
+          lohangDraft.exchangeRate
+        );
+
+        await ExtractedProductTable.findOneAndUpdate(
+          { lohangDraftId: lohangDraft._id },
+          {
+            lohangDraftId: lohangDraft._id,
+            bundleId,
+            extractedBy: lohangDraft.staffUser,
+            status: 'EXTRACTED',
+            ...productTableData,
+            updatedAt: new Date()
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ Retried PRODUCT table: ${productTableData.products?.length || 0} products`);
+      } catch (error) {
+        console.error('Retry PRODUCT table error:', error);
+        errors.push({
+          step: 'EXTRACT_PRODUCT_TABLE',
+          error: error.message,
+          details: error.stack
+        });
+      }
+    }
+
+    // RETRY: EXTRACT_NPL_TABLE
+    if (failedTables.includes('EXTRACT_NPL_TABLE')) {
+      try {
+        console.log('Retrying NPL table...');
+        const vatInvoiceDocs = documents.filter(d => d.documentType === 'VAT_INVOICE');
+
+        if (vatInvoiceDocs.length === 0) {
+          throw new Error('Không tìm thấy VAT Invoice');
+        }
+
+        const nplTableData = await extractor.extractNplTable(vatInvoiceDocs);
+
+        if (nplTableData.materials && Array.isArray(nplTableData.materials)) {
+          nplTableData.materials = nplTableData.materials.map((material, index) => ({
+            stt: index + 1,
+            ...material
+          }));
+        }
+
+        await ExtractedNplTable.findOneAndUpdate(
+          { lohangDraftId: lohangDraft._id },
+          {
+            lohangDraftId: lohangDraft._id,
+            bundleId,
+            extractedBy: lohangDraft.staffUser,
+            status: 'EXTRACTED',
+            ...nplTableData,
+            updatedAt: new Date()
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ Retried NPL table: ${nplTableData.materials?.length || 0} items`);
+      } catch (error) {
+        console.error('Retry NPL table error:', error);
+        errors.push({
+          step: 'EXTRACT_NPL_TABLE',
+          error: error.message,
+          details: error.stack
+        });
+      }
+    }
+
+    // RETRY: EXTRACT_BOM_TABLE
+    if (failedTables.includes('EXTRACT_BOM_TABLE')) {
+      try {
+        console.log('Retrying BOM table...');
+        const bomDocs = documents.filter(d => d.documentType === 'BOM');
+
+        if (bomDocs.length === 0) {
+          throw new Error('Không tìm thấy BOM document');
+        }
+
+        const productTable = await ExtractedProductTable.findOne({ 
+          lohangDraftId: lohangDraft._id 
+        }).lean();
+        
+        const skuList = (productTable?.products || []).map(p => ({
+          skuCode: p.skuCode,
+          productName: p.productName
+        }));
+
+        if (skuList.length === 0) {
+          throw new Error('Chưa có bảng Sản phẩm, không thể extract BOM');
+        }
+
+        const bomTableData = await extractor.extractBomTable(bomDocs, skuList);
+
+        await ExtractedBomTable.findOneAndUpdate(
+          { lohangDraftId: lohangDraft._id },
+          {
+            lohangDraftId: lohangDraft._id,
+            bundleId,
+            extractedBy: lohangDraft.staffUser,
+            status: 'EXTRACTED',
+            ...bomTableData,
+            updatedAt: new Date()
+          },
+          { upsert: true, new: true }
+        );
+
+        console.log(`✅ Retried BOM table: ${bomTableData.totalMaterials} materials`);
+      } catch (error) {
+        console.error('Retry BOM table error:', error);
+        errors.push({
+          step: 'EXTRACT_BOM_TABLE',
+          error: error.message,
+          details: error.stack
+        });
+      }
+    }
+
+    // Cập nhật status lohangDraft
+    const productTable = await ExtractedProductTable.findOne({ lohangDraftId: lohangDraft._id }).lean();
+    const skuCount = productTable?.products?.length || 0;
+    
+    if (errors.length > 0) {
+      // Vẫn có lỗi
+      await LohangDraft.findByIdAndUpdate(lohangDraftId, {
+        totalSkuCount: skuCount,
+        status: 'EXTRACTION_FAILED',
+        extractionErrors: errors,
+        'workflowSteps.step3_extractData.inProgress': false,
+        updatedAt: new Date()
+      });
+      console.log('Retry extraction completed with errors:', errors);
+    } else {
+      // Thành công - tất cả bảng đã được retry thành công
+      await LohangDraft.findByIdAndUpdate(lohangDraftId, {
+        totalSkuCount: skuCount,
+        status: 'EXTRACTED',
+        currentStep: 3,
+        extractionErrors: [],
+        'workflowSteps.step3_extractData.completed': true,
+        'workflowSteps.step3_extractData.completedAt': new Date(),
+        'workflowSteps.step3_extractData.inProgress': false,
+        updatedAt: new Date()
+      });
+      console.log('✅ Retry extraction completed successfully');
+    }
+
+  } catch (error) {
+    console.error('Retry failed tables extraction error:', error);
+    
+    await LohangDraft.findByIdAndUpdate(lohangDraftId, {
+      status: 'EXTRACTION_FAILED',
+      extractionErrors: [{
+        step: 'RETRY_EXTRACTION',
+        error: error.message,
+        details: error.stack
+      }],
+      updatedAt: new Date()
+    });
+  }
 }
 
 /**
