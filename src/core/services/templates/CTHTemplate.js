@@ -112,47 +112,15 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Bảng nguyên liệu chính - theo format ảnh (header 3 tầng)
+   * Bảng nguyên liệu chính - 1 dòng header duy nhất
    */
   addMainMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Header tầng 1 - Các nhóm cột chính
-    const mainHeaders = [
-      { col: 1, span: 1, text: 'STT' },
-      { col: 2, span: 1, text: 'Tên nguyên liệu' },
-      { col: 3, span: 1, text: 'Mã HS' },
-      { col: 4, span: 1, text: 'Đơn vị tính' },
-      { col: 5, span: 1, text: 'Định mức / sản phẩm kế toán' },
-      { col: 6, span: 3, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
-      { col: 9, span: 1, text: 'Nước xuất xứ' },
-      { col: 10, span: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
-      { col: 12, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
-    ];
-
-    // Vẽ header tầng 1
-    mainHeaders.forEach((header) => {
-      if (header.span > 1) {
-        worksheet.mergeCells(row, header.col, row, header.col + header.span - 1);
-      }
-      const cell = worksheet.getCell(row, header.col);
-      cell.value = header.text;
-      cell.font = { name: 'Times New Roman', size: 9, bold: true };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' }
-      };
-    });
-    worksheet.getRow(row).height = 30;
-    row++;
-
     // Merge "Trị giá (USD)" cho 2 cột (CÓ XX + KHÔNG CÓ XX)
     worksheet.mergeCells(row, 7, row, 8);
     
-    // Header duy nhất - không lặp
+    // Header duy nhất - KHÔNG lặp
     const headers = [
       { col: 1, text: 'STT', align: 'center' },
       { col: 2, text: 'Tên nguyên liệu', align: 'left' },
@@ -161,7 +129,7 @@ class CTHTemplate extends BaseTemplate {
       { col: 5, text: 'Định mức', align: 'right' },
       { col: 6, text: 'Đơn giá (CIF)', align: 'right' },
       { col: 7, text: 'Trị giá (USD)', align: 'center' },
-      { col: 9, text: 'Nước xuất xứ', align: 'left' },
+      { col: 9, text: 'Nước xuất xứ', align: 'center' },
       { col: 10, text: 'Số', align: 'center' },
       { col: 11, text: 'Ngày', align: 'center' },
       { col: 12, text: 'Số', align: 'center' },
@@ -218,7 +186,7 @@ class CTHTemplate extends BaseTemplate {
         npl.maHS || '', // Mã HS
         npl.donViTinh || '', // Đơn vị tính
         npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
-        npl.donGiaCIF || '', // Đơn giá (CIF)
+        npl.donGiaCIF ? parseFloat(npl.donGiaCIF).toFixed(8) : '', // Đơn giá (CIF) - 8 chữ số
         coXXValue ? coXXValue.toFixed(2) : '', // Trị giá CÓ XX
         khongCoXXValue ? khongCoXXValue.toFixed(2) : '', // Trị giá KHÔNG CÓ XX
         npl.xuatXu || '', // Nước xuất xứ
@@ -255,9 +223,9 @@ class CTHTemplate extends BaseTemplate {
         };
 
         // Format số
-        if (colIndex === 4) cell.numFmt = '0.00000000'; // Định mức
-        if (colIndex === 5) cell.numFmt = '0.00'; // Đơn giá
-        if ([6, 7].includes(colIndex)) cell.numFmt = '0.00'; // Trị giá
+        if (colIndex === 4) cell.numFmt = '0.00000000'; // Định mức - 8 chữ số
+        if (colIndex === 5) cell.numFmt = '0.00000000'; // Đơn giá (CIF) - 8 chữ số
+        if ([6, 7].includes(colIndex)) cell.numFmt = '0.00'; // Trị giá - 2 chữ số
       });
 
       worksheet.getRow(row).height = 18;
