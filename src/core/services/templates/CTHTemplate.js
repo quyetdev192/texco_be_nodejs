@@ -149,29 +149,51 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Header tầng 2 - Sub-headers của nhóm "Nhu cầu nguyên liệu"
+    // Header tầng 2 & 3 - Tất cả sub-headers trong 1 row
     // Merge "Trị giá (USD)" cho 2 cột (CÓ XX + KHÔNG CÓ XX)
     worksheet.mergeCells(row, 7, row, 8);
     
-    const subHeaders2 = [
-      { col: 1, text: '', span: 1 },
-      { col: 2, text: '', span: 1 },
-      { col: 3, text: '', span: 1 },
-      { col: 4, text: '', span: 1 },
-      { col: 5, text: '', span: 1 },
-      { col: 6, text: 'Đơn giá (CIF)', span: 1 },
-      { col: 7, text: 'Trị giá (USD)', span: 2 },
-      { col: 9, text: '', span: 1 },
-      { col: 10, text: '', span: 1 },
-      { col: 11, text: '', span: 1 },
-      { col: 12, text: '', span: 1 },
-      { col: 13, text: '', span: 1 }
+    const allSubHeaders = [
+      { col: 1, text: 'STT', isMerged: false },
+      { col: 2, text: 'Tên nguyên liệu', isMerged: false },
+      { col: 3, text: 'Mã HS', isMerged: false },
+      { col: 4, text: 'Đơn vị tính', isMerged: false },
+      { col: 5, text: 'Định mức', isMerged: false },
+      { col: 6, text: 'Đơn giá (CIF)', isMerged: false },
+      { col: 7, text: 'Trị giá (USD)', isMerged: true },
+      { col: 9, text: 'Nước xuất xứ', isMerged: false },
+      { col: 10, text: 'Số', isMerged: false },
+      { col: 11, text: 'Ngày', isMerged: false },
+      { col: 12, text: 'Số', isMerged: false },
+      { col: 13, text: 'Ngày', isMerged: false }
     ];
 
-    subHeaders2.forEach((header) => {
+    allSubHeaders.forEach((header) => {
       const cell = worksheet.getCell(row, header.col);
-      if (header.text) {
-        cell.value = header.text;
+      cell.value = header.text;
+      cell.font = { name: 'Times New Roman', size: 8, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+    worksheet.getRow(row).height = 25;
+    row++;
+
+    // Header tầng 3 - Chi tiết CÓ XX / KHÔNG CÓ XX
+    const detailHeaders = [
+      '', '', '', '', '',
+      '', 'CÓ XX', 'KHÔNG CÓ XX',
+      '', '', '', '', ''
+    ];
+
+    detailHeaders.forEach((header, index) => {
+      const cell = worksheet.getCell(row, index + 1);
+      if (header) {
+        cell.value = header;
         cell.font = { name: 'Times New Roman', size: 8, bold: true };
       }
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
@@ -183,30 +205,6 @@ class CTHTemplate extends BaseTemplate {
       };
     });
     worksheet.getRow(row).height = 20;
-    row++;
-
-    // Header tầng 3 - Sub-sub-headers (chi tiết)
-    const subHeaders3 = [
-      'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính', 'Định mức',
-      'Đơn giá (CIF)', 'CÓ XX', 'KHÔNG CÓ XX',
-      'Nước xuất xứ',
-      'Số', 'Ngày',
-      'Số', 'Ngày'
-    ];
-
-    subHeaders3.forEach((header, index) => {
-      const cell = worksheet.getCell(row, index + 1);
-      cell.value = header;
-      cell.font = { name: 'Times New Roman', size: 8, bold: true };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' }
-      };
-    });
-    worksheet.getRow(row).height = 25;
     row++;
 
     // Data rows - 13 cột (Trị giá chia CÓ XX / KHÔNG CÓ XX)
