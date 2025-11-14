@@ -150,7 +150,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Header tầng 2 - Sub-headers (14 cột)
+    // Header tầng 2 - Sub-headers (13 cột)
     const subHeaders = [
       'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính', 'Định mức',
       'Đơn giá (CIF)', 'Trị giá (USD)',
@@ -175,7 +175,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 25;
     row++;
 
-    // Data rows - 14 cột (xoá ghi chú)
+    // Data rows - 13 cột (xoá cột Trị giá riêng)
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
       const rowData = [
@@ -223,8 +223,8 @@ class CTHTemplate extends BaseTemplate {
       row++;
     });
 
-    // Total row - 14 cột
-    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', ''];
+    // Total row - 13 cột
+    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
@@ -244,8 +244,8 @@ class CTHTemplate extends BaseTemplate {
 
     worksheet.getRow(row).height = 18;
 
-    // Set column widths - 14 cột
-    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 8, 10, 8, 10];
+    // Set column widths - 13 cột
+    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 8, 10, 8];
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
     });
