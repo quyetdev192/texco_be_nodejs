@@ -21,22 +21,22 @@ class CTHTemplate extends BaseTemplate {
     let currentRow = 1;
 
     // 1. Tiêu đề chính
-    worksheet.mergeCells(`A${currentRow}:M${currentRow}`);
+    worksheet.mergeCells(`A${currentRow}:N${currentRow}`);
     const titleCell = worksheet.getCell(`A${currentRow}`);
     titleCell.value = `BẢNG KÊ KHAI HÀNG HÓA XUẤT KHẨU ĐẠT TIÊU CHÍ "CTH"`;
-    titleCell.font = { name: 'Times New Roman', size: 13, bold: true };
+    titleCell.font = { name: 'Times New Roman', size: 12, bold: true };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(currentRow).height = 22;
+    worksheet.getRow(currentRow).height = 20;
     currentRow++;
 
     // 2. Subtitle
-    worksheet.mergeCells(`A${currentRow}:M${currentRow}`);
+    worksheet.mergeCells(`A${currentRow}:N${currentRow}`);
     const subtitleCell = worksheet.getCell(`A${currentRow}`);
     subtitleCell.value = `(Ban hành theo Thông tư số 05/2018/TT-BCT ngày 03/04/2018 quy định về xuất xứ hàng hóa)`;
     subtitleCell.font = { name: 'Times New Roman', size: 9, italic: true };
     subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     worksheet.getRow(currentRow).height = 15;
-    currentRow += 3;
+    currentRow += 2;
 
     // 3. Thông tin công ty (2 cột)
     this.addCompanyInfoCompact(worksheet, currentRow, headerInfo, skuData);
@@ -58,234 +58,222 @@ class CTHTemplate extends BaseTemplate {
   addCompanyInfoCompact(worksheet, startRow, headerInfo, skuData) {
     let row = startRow;
 
-    // Cột trái: Thông tin công ty (căn trái)
+    // Cột trái: Thông tin công ty
     worksheet.getCell(`A${row}`).value = 'Tên thương nhân:';
     worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`B${row}:D${row}`);
     worksheet.getCell(`B${row}`).value = headerInfo.companyName || 'CÔNG TY TNHH MAI THƠ VIỆT NAM';
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`B${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
     row++;
 
     worksheet.getCell(`A${row}`).value = 'Mã số thuế:';
     worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`B${row}:D${row}`);
     worksheet.getCell(`B${row}`).value = headerInfo.taxCode || '3702797777';
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`B${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
     row++;
 
     worksheet.getCell(`A${row}`).value = 'Tờ khai hải quan XK số:';
     worksheet.getCell(`A${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`A${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`B${row}:D${row}`);
     worksheet.getCell(`B${row}`).value = headerInfo.exportDeclarationNumber || '';
     worksheet.getCell(`B${row}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`B${row}`).alignment = { horizontal: 'left', vertical: 'middle' };
     row++;
 
     // Cột phải: Thông tin sản phẩm chi tiết
     const productRow = startRow;
     worksheet.getCell(`H${productRow}`).value = 'Tiêu chí áp dụng:';
     worksheet.getCell(`H${productRow}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`H${productRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`I${productRow}:M${productRow}`);
     worksheet.getCell(`I${productRow}`).value = 'CTH';
     worksheet.getCell(`I${productRow}`).font = { name: 'Times New Roman', size: 10, bold: true };
-    worksheet.getCell(`I${productRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 1}`).value = 'Tên hàng:';
     worksheet.getCell(`H${productRow + 1}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`H${productRow + 1}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`I${productRow + 1}:M${productRow + 1}`);
     worksheet.getCell(`I${productRow + 1}`).value = skuData.product?.productName || '';
     worksheet.getCell(`I${productRow + 1}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 1}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 2}`).value = 'Mã HS:';
     worksheet.getCell(`H${productRow + 2}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`H${productRow + 2}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`I${productRow + 2}:M${productRow + 2}`);
     worksheet.getCell(`I${productRow + 2}`).value = skuData.product?.hsCode || '';
     worksheet.getCell(`I${productRow + 2}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 2}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
+    // Thêm thông tin sản phẩm bổ sung (hàng 4-7)
     worksheet.getCell(`H${productRow + 3}`).value = 'Số lượng:';
     worksheet.getCell(`H${productRow + 3}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`H${productRow + 3}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`I${productRow + 3}:M${productRow + 3}`);
     worksheet.getCell(`I${productRow + 3}`).value = skuData.product?.quantity || '';
     worksheet.getCell(`I${productRow + 3}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 3}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 4}`).value = 'Trị giá FOB:';
     worksheet.getCell(`H${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`H${productRow + 4}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`I${productRow + 4}:M${productRow + 4}`);
     worksheet.getCell(`I${productRow + 4}`).value = skuData.product?.fobValue ? `${skuData.product.fobValue} USD` : '';
     worksheet.getCell(`I${productRow + 4}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 4}`).alignment = { horizontal: 'left', vertical: 'middle' };
 
     worksheet.getCell(`H${productRow + 5}`).value = 'Trị giá FOB loại trừ:';
     worksheet.getCell(`H${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`H${productRow + 5}`).alignment = { horizontal: 'left', vertical: 'middle' };
-    worksheet.mergeCells(`I${productRow + 5}:M${productRow + 5}`);
     worksheet.getCell(`I${productRow + 5}`).value = skuData.product?.fobExcluding ? `${skuData.product.fobExcluding} USD` : '';
     worksheet.getCell(`I${productRow + 5}`).font = { name: 'Times New Roman', size: 10 };
-    worksheet.getCell(`I${productRow + 5}`).alignment = { horizontal: 'left', vertical: 'middle' };
   }
 
   /**
-   * Bảng nguyên liệu chính - 1 dòng header duy nhất
+   * Bảng nguyên liệu chính - theo format ảnh (header 3 tầng)
    */
   addMainMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Merge "Trị giá (USD)" cho 2 cột (CÓ XX + KHÔNG CÓ XX)
-    worksheet.mergeCells(row, 7, row, 8);
-    
-    // Header duy nhất - KHÔNG lặp
-    const headers = [
-      { col: 1, text: 'STT', align: 'center' },
-      { col: 2, text: 'Tên nguyên liệu', align: 'left' },
-      { col: 3, text: 'Mã HS', align: 'center' },
-      { col: 4, text: 'Đơn vị tính', align: 'center' },
-      { col: 5, text: 'Định mức', align: 'right' },
-      { col: 6, text: 'Đơn giá (CIF)', align: 'right' },
-      { col: 7, text: 'Trị giá (USD)', align: 'center' },
-      { col: 9, text: 'Nước xuất xứ', align: 'left' },
-      { col: 10, text: 'Số', align: 'center' },
-      { col: 11, text: 'Ngày', align: 'center' },
-      { col: 12, text: 'Số', align: 'center' },
-      { col: 13, text: 'Ngày', align: 'center' }
+    // Header tầng 1 - Các nhóm cột chính
+    const mainHeaders = [
+      { col: 1, span: 1, rowspan: 3, text: 'STT' },
+      { col: 2, span: 1, rowspan: 3, text: 'Tên nguyên liệu' },
+      { col: 3, span: 1, rowspan: 3, text: 'Mã HS' },
+      { col: 4, span: 1, rowspan: 3, text: 'Đơn vị tính' },
+      { col: 5, span: 1, rowspan: 3, text: 'Định mức / sản phẩm kế toán' },
+      { col: 6, span: 3, rowspan: 1, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
+      { col: 9, span: 1, rowspan: 3, text: 'Nước xuất xứ' },
+      { col: 10, span: 2, rowspan: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
+      { col: 12, span: 2, rowspan: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' }
     ];
 
-    headers.forEach((header) => {
+    // Vẽ header tầng 1
+    mainHeaders.forEach((header) => {
+      if (header.span > 1) {
+        worksheet.mergeCells(row, header.col, row, header.col + header.span - 1);
+      }
+      if (header.rowspan > 1) {
+        worksheet.mergeCells(row, header.col, row + header.rowspan - 1, header.col + header.span - 1);
+      }
       const cell = worksheet.getCell(row, header.col);
       cell.value = header.text;
       cell.font = { name: 'Times New Roman', size: 9, bold: true };
-      cell.alignment = { horizontal: header.align, vertical: 'middle', wrapText: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
-        top: { style: 'medium' },
+        top: { style: 'thin' },
         left: { style: 'thin' },
-        bottom: { style: 'medium' },
+        bottom: { style: 'thin' },
         right: { style: 'thin' }
       };
     });
     worksheet.getRow(row).height = 25;
     row++;
 
-    // Sub-header: CÓ XX / KHÔNG CÓ XX (chỉ dưới cột 7-8)
-    const subHeaders = [
-      '', '', '', '', '', '', 'CÓ XX', 'KHÔNG CÓ XX', '', '', '', '', ''
+    // Header tầng 2 - Sub-headers
+    const secondHeaders = [
+      { col: 6, span: 1, rowspan: 2, text: 'Đơn giá (CIF)' },
+      { col: 7, span: 2, rowspan: 1, text: 'Trị giá (USD)' },
+      { col: 10, span: 1, text: 'Số' },
+      { col: 11, span: 1, text: 'Ngày' },
+      { col: 12, span: 1, text: 'Số' },
+      { col: 13, span: 1, text: 'Ngày' }
     ];
 
-    subHeaders.forEach((header, index) => {
-      const cell = worksheet.getCell(row, index + 1);
-      if (header) {
-        cell.value = header;
-        cell.font = { name: 'Times New Roman', size: 9, bold: true };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    secondHeaders.forEach((header) => {
+      if (header.span > 1) {
+        worksheet.mergeCells(row, header.col, row, header.col + header.span - 1);
       }
+      if (header.rowspan > 1) {
+        worksheet.mergeCells(row, header.col, row + header.rowspan - 1, header.col + header.span - 1);
+      }
+      const cell = worksheet.getCell(row, header.col);
+      cell.value = header.text;
+      cell.font = { name: 'Times New Roman', size: 8, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
         top: { style: 'thin' },
-        left: { style: 'medium' },
-        bottom: { style: 'medium' },
-        right: { style: 'medium' }
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
       };
     });
     worksheet.getRow(row).height = 20;
     row++;
 
-    // Data rows - 13 cột (Trị giá chia CÓ XX / KHÔNG CÓ XX)
-    let totalValueCoXX = 0;
-    let totalValueKhongCoXX = 0;
+    // Header tầng 3 - Trị giá (USD) sub-columns
+    const thirdHeaders = [
+      { col: 7, span: 1, text: 'CÓ XX' },
+      { col: 8, span: 1, text: 'KHÔNG CÓ XX' }
+    ];
+
+    thirdHeaders.forEach((header) => {
+      const cell = worksheet.getCell(row, header.col);
+      cell.value = header.text;
+      cell.font = { name: 'Times New Roman', size: 8, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+    worksheet.getRow(row).height = 20;
+    row++;
+
+    // Data rows - 13 cột (STT, Tên NL, Mã HS, ĐVT, Định mức, Đơn giá CIF, CÓ XX, KHÔNG CÓ XX, Nước XK, Số TK, Ngày TK, Số CO, Ngày CO)
+    let totalValue = 0;
     nplDetails.forEach((npl, index) => {
-      const coXXValue = npl.xuatXu && npl.triGia ? npl.triGia : 0;
-      const khongCoXXValue = !npl.xuatXu && npl.triGia ? npl.triGia : 0;
-      
       const rowData = [
         index + 1, // STT
         npl.tenNguyenLieu || '', // Tên nguyên liệu
         npl.maHS || '', // Mã HS
         npl.donViTinh || '', // Đơn vị tính
         npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
-        npl.donGiaCIF ? parseFloat(npl.donGiaCIF).toFixed(8) : '', // Đơn giá (CIF) - 8 chữ số
-        coXXValue ? coXXValue.toFixed(2) : '', // Trị giá CÓ XX
-        khongCoXXValue ? khongCoXXValue.toFixed(2) : '', // Trị giá KHÔNG CÓ XX
+        npl.donGiaCIF || '', // Đơn giá (CIF)
+        npl.xuatXu ? (npl.triGia ? npl.triGia.toFixed(2) : '') : '', // Trị giá CÓ XX
+        npl.xuatXu ? '' : (npl.triGia ? npl.triGia.toFixed(2) : ''), // Trị giá KHÔNG CÓ XX
         npl.xuatXu || '', // Nước xuất xứ
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
         npl.soChungNhan || '', // Số C/O
         npl.ngayChungNhan ? new Date(npl.ngayChungNhan).toLocaleDateString('vi-VN') : '' // Ngày C/O
       ];
-      
-      totalValueCoXX += coXXValue;
-      totalValueKhongCoXX += khongCoXXValue;
 
       rowData.forEach((data, colIndex) => {
         const cell = worksheet.getCell(row, colIndex + 1);
         cell.value = data;
         cell.font = { name: 'Times New Roman', size: 9 };
-        
-        // Căn lề đúng theo cột
-        let alignment = 'center';
-        if (colIndex === 1) alignment = 'left'; // Tên nguyên liệu
-        if (colIndex === 8) alignment = 'left'; // Nước xuất xứ
-        if ([4, 5, 6].includes(colIndex)) alignment = 'right'; // Định mức, Đơn giá, Trị giá
-        
         cell.alignment = {
-          horizontal: alignment,
+          horizontal: [1, 9, 10].includes(colIndex) ? 'left' : 'center',
           vertical: 'middle',
           wrapText: true
         };
         cell.border = {
           top: { style: 'thin' },
-          left: { style: 'medium' },
+          left: { style: 'thin' },
           bottom: { style: 'thin' },
-          right: { style: 'medium' }
+          right: { style: 'thin' }
         };
 
-        // Format số
-        if (colIndex === 4) cell.numFmt = '0.00000000'; // Định mức - 8 chữ số
-        if (colIndex === 5) cell.numFmt = '0.00000000'; // Đơn giá (CIF) - 8 chữ số
-        if ([6, 7].includes(colIndex)) cell.numFmt = '0.00'; // Trị giá - 2 chữ số
+        if ([4, 5].includes(colIndex)) {
+          cell.numFmt = '0.00000000';
+        } else if (colIndex === 7) {
+          cell.numFmt = '0.00';
+        }
       });
 
+      if (npl.triGia) totalValue += npl.triGia;
       worksheet.getRow(row).height = 18;
       row++;
     });
 
-    // Total row - 13 cột (tính tổng riêng CÓ XX và KHÔNG CÓ XX)
-    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValueCoXX.toFixed(2), totalValueKhongCoXX.toFixed(2), '', '', '', '', ''];
+    // Total row - 13 cột
+    const totalRowData = ['', 'Cộng:', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
-      cell.font = { name: 'Times New Roman', size: 9, bold: true };
-      
-      let alignment = 'center';
-      if (colIndex === 1) alignment = 'left'; // Cộng
-      if ([6, 7].includes(colIndex)) alignment = 'right'; // Trị giá
-      
-      cell.alignment = { horizontal: alignment, vertical: 'middle' };
+      cell.font = { name: 'Times New Roman', size: 9, bold: colIndex === 1 || colIndex === 6 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.border = {
-        top: { style: 'medium' },
-        left: { style: 'medium' },
-        bottom: { style: 'medium' },
-        right: { style: 'medium' }
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
       };
 
-      if ([6, 7].includes(colIndex)) {
+      if (colIndex === 6 || colIndex === 7) {
         cell.numFmt = '0.00';
       }
     });
 
     worksheet.getRow(row).height = 18;
 
-    // Set column widths - 13 cột (match template)
-    const columnWidths = [4, 22, 10, 10, 12, 12, 11, 11, 14, 8, 10, 8, 10];
+    // Set column widths - 13 cột
+    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 8, 10, 8, 10];
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
     });
@@ -294,7 +282,7 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Kết luận + Footer - ngày lập trên trái, người đại diện trên phải, chữ ký dưới
+   * Kết luận + Footer với ngày lập trên, người đại diện dưới
    */
   addConclusionCompact(worksheet, startRow, skuData) {
     let row = startRow;
@@ -308,21 +296,23 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 18;
     row += 2;
 
-    // Ngày lập (trên trái) - căn trái đúng vị trí
+    // Ngày lập (trên cùng)
     const today = new Date();
     const day = today.getDate();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
     const dateStr = `TP. Hồ Chí Minh, ngày ${day} tháng ${month} năm ${year}`;
 
-    worksheet.mergeCells(`A${row}:C${row}`);
+    worksheet.mergeCells(`A${row}:D${row}`);
     const dateCell = worksheet.getCell(`A${row}`);
     dateCell.value = dateStr;
     dateCell.font = { name: 'Times New Roman', size: 9 };
     dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.getRow(row).height = 16;
+    row += 3;
 
-    // Người đại diện (trên phải)
-    worksheet.mergeCells(`J${row}:M${row}`);
+    // Người đại diện (dưới)
+    worksheet.mergeCells(`J${row}:N${row}`);
     const repCell = worksheet.getCell(`J${row}`);
     repCell.value = 'Người đại diện theo pháp luật thương nhân';
     repCell.font = { name: 'Times New Roman', size: 9 };
@@ -330,8 +320,8 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 16;
     row += 2;
 
-    // Chữ ký và dấu (dưới phải)
-    worksheet.mergeCells(`J${row}:M${row}`);
+    // Chữ ký và dấu
+    worksheet.mergeCells(`J${row}:N${row}`);
     const signCell = worksheet.getCell(`J${row}`);
     signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
     signCell.font = { name: 'Times New Roman', size: 9, italic: true };
