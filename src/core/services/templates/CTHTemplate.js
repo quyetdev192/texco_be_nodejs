@@ -112,12 +112,12 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Bảng nguyên liệu chính - theo format ảnh (11 cột)
+   * Bảng nguyên liệu chính - theo format ảnh (15 cột)
    */
   addMainMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Header
+    // Header - 15 cột
     const headers = [
       'STT',
       'Tên nguyên liệu',
@@ -129,7 +129,11 @@ class CTHTemplate extends BaseTemplate {
       'Trị giá (USD)',
       'CÓ XX / KHÔNG CÓ XX',
       'Nước xuất xứ',
-      'Hóa đơn / Chứng nhận'
+      'Số',
+      'Ngày',
+      'Số',
+      'Ngày',
+      'Ghi chú'
     ];
 
     // Tạo header
@@ -148,7 +152,7 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Data rows
+    // Data rows - 15 cột
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
       const rowData = [
@@ -162,7 +166,11 @@ class CTHTemplate extends BaseTemplate {
         npl.triGia ? npl.triGia.toFixed(2) : '',
         npl.xuatXu ? 'CÓ XX' : 'KHÔNG CÓ XX',
         npl.xuatXu || '',
-        npl.soHoaDon ? `${npl.soHoaDon} / ${npl.ngayHoaDon || ''}` : ''
+        npl.soHoaDon || '', // Số tờ khai/hóa đơn
+        npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
+        npl.soChungNhan || '', // Số C/O
+        npl.ngayChungNhan ? new Date(npl.ngayChungNhan).toLocaleDateString('vi-VN') : '', // Ngày C/O
+        '' // Ghi chú
       ];
 
       rowData.forEach((data, colIndex) => {
@@ -193,8 +201,8 @@ class CTHTemplate extends BaseTemplate {
       row++;
     });
 
-    // Total row
-    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', ''];
+    // Total row - 15 cột
+    const totalRowData = ['', 'Cộng:', '', '', '', '', '', totalValue.toFixed(2), '', '', '', '', '', '', ''];
     totalRowData.forEach((data, colIndex) => {
       const cell = worksheet.getCell(row, colIndex + 1);
       cell.value = data;
@@ -214,8 +222,8 @@ class CTHTemplate extends BaseTemplate {
 
     worksheet.getRow(row).height = 18;
 
-    // Set column widths
-    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 20];
+    // Set column widths - 15 cột
+    const columnWidths = [5, 25, 12, 10, 15, 15, 12, 12, 15, 15, 8, 10, 8, 10, 15];
     columnWidths.forEach((width, index) => {
       worksheet.getColumn(index + 1).width = width;
     });
