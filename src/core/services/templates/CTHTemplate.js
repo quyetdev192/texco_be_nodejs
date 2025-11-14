@@ -218,6 +218,9 @@ class CTHTemplate extends BaseTemplate {
     // Data rows - 13 cột (STT, Tên NL, Mã HS, ĐVT, Định mức, Đơn giá CIF, CÓ XX, KHÔNG CÓ XX, Nước XK, Số TK, Ngày TK, Số CO, Ngày CO)
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
+      // Kiểm tra hasXx field - nếu có thì ghi vào cột CÓ XX, nếu không thì ghi vào cột KHÔNG CÓ XX
+      const hasXx = npl.hasXx !== undefined ? npl.hasXx : (npl.nuocXuatXu && !npl.nuocXuatXu.includes('MUA VN KRXX'));
+      
       const rowData = [
         index + 1, // STT
         npl.tenNguyenLieu || '', // Tên nguyên liệu
@@ -225,8 +228,8 @@ class CTHTemplate extends BaseTemplate {
         npl.donViTinh || '', // Đơn vị tính
         npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
         npl.donGiaCIF || '', // Đơn giá (CIF)
-        npl.nuocXuatXu ? (npl.triGia ? npl.triGia.toFixed(2) : '') : '', // Trị giá CÓ XX
-        npl.nuocXuatXu ? '' : (npl.triGia ? npl.triGia.toFixed(2) : ''), // Trị giá KHÔNG CÓ XX
+        hasXx ? (npl.triGia ? npl.triGia.toFixed(2) : '') : '', // Trị giá CÓ XX
+        !hasXx ? (npl.triGia ? npl.triGia.toFixed(2) : '') : '', // Trị giá KHÔNG CÓ XX
         npl.nuocXuatXu || '', // Nước xuất xứ
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
@@ -267,7 +270,9 @@ class CTHTemplate extends BaseTemplate {
     let totalKhongCoXX = 0;
     nplDetails.forEach((npl) => {
       if (npl.triGia) {
-        if (npl.nuocXuatXu) {
+        // Kiểm tra hasXx field - nếu có thì tính vào CÓ XX, nếu không thì tính vào KHÔNG CÓ XX
+        const hasXx = npl.hasXx !== undefined ? npl.hasXx : (npl.nuocXuatXu && !npl.nuocXuatXu.includes('MUA VN KRXX'));
+        if (hasXx) {
           totalCoXX += npl.triGia;
         } else {
           totalKhongCoXX += npl.triGia;
