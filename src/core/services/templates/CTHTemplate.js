@@ -236,32 +236,32 @@ class CTHTemplate extends BaseTemplate {
     conclusionCell.font = { name: 'Times New Roman', size: 10, bold: true };
     conclusionCell.alignment = { horizontal: 'left', vertical: 'middle' };
     worksheet.getRow(row).height = 18;
-    row += 3;
+    row += 2;
 
-    // Footer: Ngày lập + Người đại diện
+    // Footer: Ngày lập (trái) + Người đại diện (phải)
     const today = new Date();
     const day = today.getDate();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
     const dateStr = `TP. Hồ Chí Minh, ngày ${day} tháng ${month} năm ${year}`;
 
-    // Ngày lập (cột trái)
-    worksheet.mergeCells(`A${row}:C${row}`);
+    // Ngày lập (cột trái A-D)
+    worksheet.mergeCells(`A${row}:D${row}`);
     const dateCell = worksheet.getCell(`A${row}`);
     dateCell.value = dateStr;
     dateCell.font = { name: 'Times New Roman', size: 9 };
-    dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    dateCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    worksheet.getRow(row).height = 16;
 
-    // Người đại diện (cột phải)
+    // Người đại diện (cột phải J-N)
     worksheet.mergeCells(`J${row}:N${row}`);
     const repCell = worksheet.getCell(`J${row}`);
     repCell.value = 'Người đại diện theo pháp luật thương nhân';
     repCell.font = { name: 'Times New Roman', size: 9 };
     repCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(row).height = 16;
-    row += 3;
+    row += 2;
 
-    // Chữ ký và dấu
+    // Chữ ký và dấu (cột phải J-N)
     worksheet.mergeCells(`J${row}:N${row}`);
     const signCell = worksheet.getCell(`J${row}`);
     signCell.value = '(Ký, dấu dấu, ghi rõ họ tên)';
