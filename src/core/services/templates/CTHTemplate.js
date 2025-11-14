@@ -112,34 +112,33 @@ class CTHTemplate extends BaseTemplate {
   }
 
   /**
-   * Bảng nguyên liệu chính - theo format ảnh (15 cột)
+   * Bảng nguyên liệu chính - theo format ảnh (header 2 tầng)
    */
   addMainMaterialTable(worksheet, startRow, nplDetails) {
     let row = startRow;
 
-    // Header - 15 cột
-    const headers = [
-      'STT',
-      'Tên nguyên liệu',
-      'Mã HS',
-      'Đơn vị tính',
-      'Định mức / sản phẩm kế toán',
-      'Tổng lượng NPL sử dụng',
-      'Đơn giá (CIF)',
-      'Trị giá (USD)',
-      'CÓ XX / KHÔNG CÓ XX',
-      'Nước xuất xứ',
-      'Số',
-      'Ngày',
-      'Số',
-      'Ngày',
-      'Ghi chú'
+    // Header tầng 1 - Các nhóm cột
+    const mainHeaders = [
+      { col: 1, span: 1, text: 'STT' },
+      { col: 2, span: 1, text: 'Tên nguyên liệu' },
+      { col: 3, span: 1, text: 'Mã HS' },
+      { col: 4, span: 1, text: 'Đơn vị tính' },
+      { col: 5, span: 1, text: 'Định mức / sản phẩm kế toán' },
+      { col: 6, span: 2, text: 'Nhu cầu nguyên liệu sử dụng cho lô hàng' },
+      { col: 8, span: 2, text: 'Trị giá' },
+      { col: 10, span: 1, text: 'Nước xuất xứ' },
+      { col: 11, span: 2, text: 'Tờ khai hải quan nhập khẩu / Hóa đơn giá trị gia tăng' },
+      { col: 13, span: 2, text: 'C/O ưu đãi NK / Bản khai báo của nhà SX/nhà cung cấp NL trong nước' },
+      { col: 15, span: 1, text: 'Ghi chú' }
     ];
 
-    // Tạo header
-    headers.forEach((header, index) => {
-      const cell = worksheet.getCell(row, index + 1);
-      cell.value = header;
+    // Vẽ header tầng 1
+    mainHeaders.forEach((header) => {
+      if (header.span > 1) {
+        worksheet.mergeCells(row, header.col, row, header.col + header.span - 1);
+      }
+      const cell = worksheet.getCell(row, header.col);
+      cell.value = header.text;
       cell.font = { name: 'Times New Roman', size: 9, bold: true };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
@@ -152,20 +151,46 @@ class CTHTemplate extends BaseTemplate {
     worksheet.getRow(row).height = 30;
     row++;
 
-    // Data rows - 15 cột
+    // Header tầng 2 - Sub-headers
+    const subHeaders = [
+      'STT', 'Tên nguyên liệu', 'Mã HS', 'Đơn vị tính', 'Định mức',
+      'Đơn giá (CIF)', 'Trị giá (USD)',
+      'CÓ XX', 'KHÔNG CÓ XX',
+      'Nước xuất xứ',
+      'Số', 'Ngày',
+      'Số', 'Ngày',
+      'Ghi chú'
+    ];
+
+    subHeaders.forEach((header, index) => {
+      const cell = worksheet.getCell(row, index + 1);
+      cell.value = header;
+      cell.font = { name: 'Times New Roman', size: 8, bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+    worksheet.getRow(row).height = 25;
+    row++;
+
+    // Data rows - 15 cột (match sub-headers)
     let totalValue = 0;
     nplDetails.forEach((npl, index) => {
       const rowData = [
-        index + 1,
-        npl.tenNguyenLieu || '',
-        npl.maHS || '',
-        npl.donViTinh || '',
-        npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '',
-        npl.tongLuongSuDung ? npl.tongLuongSuDung.toFixed(8) : '',
-        npl.donGiaCIF || '',
-        npl.triGia ? npl.triGia.toFixed(2) : '',
-        npl.xuatXu ? 'CÓ XX' : 'KHÔNG CÓ XX',
-        npl.xuatXu || '',
+        index + 1, // STT
+        npl.tenNguyenLieu || '', // Tên nguyên liệu
+        npl.maHS || '', // Mã HS
+        npl.donViTinh || '', // Đơn vị tính
+        npl.dinhMuc ? npl.dinhMuc.toFixed(8) : '', // Định mức
+        npl.donGiaCIF || '', // Đơn giá (CIF)
+        npl.triGia ? npl.triGia.toFixed(2) : '', // Trị giá (USD)
+        npl.xuatXu ? 'CÓ XX' : '', // CÓ XX
+        npl.xuatXu ? '' : 'KHÔNG CÓ XX', // KHÔNG CÓ XX
+        npl.xuatXu || '', // Nước xuất xứ
         npl.soHoaDon || '', // Số tờ khai/hóa đơn
         npl.ngayHoaDon ? new Date(npl.ngayHoaDon).toLocaleDateString('vi-VN') : '', // Ngày
         npl.soChungNhan || '', // Số C/O
