@@ -189,7 +189,7 @@ class ReportGeneratorService {
     ]);
 
     if (!lohangDraft || !productTable || !nplTable || !bomTable) {
-      throw new Error('Thiếu dữ liệu cần thiết để tạo bảng kê CTC');
+      throw new Error('Thiếu dữ liệu cần thiết để tạo bảng kê');
     }
 
     // Load thông tin công ty

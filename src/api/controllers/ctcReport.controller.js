@@ -59,7 +59,7 @@ const retryCTCReports = asyncHandler(async (req, res) => {
   return res.status(constants.HTTP_STATUS.OK).json({
     success: true,
     errorCode: 0,
-    message: 'Retry tạo bảng kê CTC thành công',
+    message: 'Retry tạo bảng kê thành công',
     data: result
   });
 });

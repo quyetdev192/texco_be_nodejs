@@ -215,7 +215,7 @@ const CO_STEP_VI = {
     2: 'Step 2 - Chọn Form & Tiêu chí',
     3: 'Step 3 - Trích xuất Dữ liệu',
     4: 'Step 4 - Tính toán Phân bổ',
-    5: 'Step 5 - Tạo Bảng kê CTC',
+    5: 'Step 5 - Tạo Bảng kê',
     6: 'Step 6 - Xem xét Kết quả',
     7: 'Step 7 - Xuất C/O'
 };
