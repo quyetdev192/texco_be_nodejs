@@ -26,18 +26,30 @@ router.get('/documents', verifyToken, requireRole('SUPPLIER'), documentControlle
 router.post('/documents', verifyToken, requireRole('SUPPLIER'), documentController.supplierCreate);
 router.put('/documents/:bundleId', verifyToken, requireRole('SUPPLIER'), documentController.supplierUpdate);
 
-router.get('/review/documents', verifyToken, requireRole('STAFF'), documentController.staffList);
-router.put('/review/documents/:bundleId/review', verifyToken, requireRole('STAFF'), documentController.staffReview);
-router.put('/review/documents/:bundleId/ocr-retry/:documentId', verifyToken, requireRole('STAFF'), documentController.staffRetryOcr);
-router.put('/review/documents/:bundleId/ocr-retry', verifyToken, requireRole('STAFF'), documentController.staffRetryOcrForBundle);
-router.post('/review/documents/:bundleId/add', verifyToken, requireRole('STAFF'), documentController.staffAddDocuments);
-router.put('/review/documents/:bundleId/documents/:documentId', verifyToken, requireRole('STAFF'), coProcessController.updateDocument);
-router.delete('/review/documents/:bundleId/documents/:documentId', verifyToken, requireRole('STAFF'), coProcessController.deleteDocument);
+router.get('/review/documents', verifyToken, requireRole(['STAFF', 'MOIT']), documentController.staffList);
+router.put('/review/documents/:bundleId/review', verifyToken, requireRole(['STAFF', 'MOIT']), documentController.staffReview);
+router.put('/review/documents/:bundleId/ocr-retry/:documentId', verifyToken, requireRole(['STAFF', 'MOIT']), documentController.staffRetryOcr);
+router.put('/review/documents/:bundleId/ocr-retry', verifyToken, requireRole(['STAFF', 'MOIT']), documentController.staffRetryOcrForBundle);
+router.post('/review/documents/:bundleId/add', verifyToken, requireRole(['STAFF', 'MOIT']), documentController.staffAddDocuments);
+router.put('/review/documents/:bundleId/documents/:documentId', verifyToken, requireRole(['STAFF', 'MOIT']), coProcessController.updateDocument);
+router.delete('/review/documents/:bundleId/documents/:documentId', verifyToken, requireRole(['STAFF', 'MOIT']), coProcessController.deleteDocument);
 
-router.get('/co/list', verifyToken, requireRole('STAFF'), coProcessController.listCO);
+// C/O List & Detail - STAFF + MOIT (read-only)
+router.get('/co/list', verifyToken, requireRole(['STAFF', 'MOIT']), coProcessController.listCO);
+router.get('/co/lohang/:lohangDraftId', verifyToken, requireRole(['STAFF', 'MOIT']), coProcessController.getLohangDetail);
+router.get('/co/lohang/:lohangDraftId/tables', verifyToken, requireRole(['STAFF', 'MOIT']), extractedTablesController.getAllTables);
+router.get('/co/lohang/:lohangDraftId/tables/products', verifyToken, requireRole(['STAFF', 'MOIT']), extractedTablesController.getProductTable);
+router.get('/co/lohang/:lohangDraftId/tables/npl', verifyToken, requireRole(['STAFF', 'MOIT']), extractedTablesController.getNplTable);
+router.get('/co/lohang/:lohangDraftId/tables/bom', verifyToken, requireRole(['STAFF', 'MOIT']), extractedTablesController.getBomTable);
+router.get('/co/lohang/:lohangDraftId/consumption', verifyToken, requireRole(['STAFF', 'MOIT']), calculationController.getConsumptionTable);
+router.get('/co/lohang/:lohangDraftId/allocations', verifyToken, requireRole(['STAFF', 'MOIT']), calculationController.getAllocationTable);
+router.get('/co/lohang/:lohangDraftId/ctc-reports', verifyToken, requireRole(['STAFF', 'MOIT']), ctcReportController.getCTCReports);
+
+// C/O Create & Manage - STAFF only
 router.post('/co/create', verifyToken, requireRole('STAFF'), coProcessController.createCO);
 router.get('/co/supported-combinations', verifyToken, requireRole('STAFF'), coProcessController.getSupportedCombinations);
 
+// C/O Workflow - STAFF only
 router.post('/co/lohang/:id/continue', verifyToken, requireRole('STAFF'), coProcessController.continueToNextStep);
 router.put('/co/lohang/:lohangDraftId/setup', verifyToken, requireRole('STAFF'), coProcessController.setupFormAndCriteria);
 router.post('/co/lohang/:id/setup-and-extract', verifyToken, requireRole('STAFF'), coProcessController.setupAndExtract);
@@ -45,24 +57,19 @@ router.post('/co/lohang/:id/extract-tables', verifyToken, requireRole('STAFF'), 
 router.post('/co/lohang/:id/retry-extraction', verifyToken, requireRole('STAFF'), coProcessController.retryExtraction);
 router.post('/co/lohang/:id/re-extract-table', verifyToken, requireRole('STAFF'), coProcessController.reExtractTable);
 router.post('/co/lohang/:lohangDraftId/calculate-consumption', verifyToken, requireRole('STAFF'), coProcessController.calculateConsumption);
-router.get('/co/lohang/:lohangDraftId/consumption', verifyToken, requireRole('STAFF'), calculationController.getConsumptionTable);
-router.get('/co/lohang/:lohangDraftId/allocations', verifyToken, requireRole('STAFF'), calculationController.getAllocationTable);
-router.get('/co/lohang/:lohangDraftId', verifyToken, requireRole('STAFF'), coProcessController.getLohangDetail);
-router.get('/co/lohang/:lohangDraftId/tables', verifyToken, requireRole('STAFF'), extractedTablesController.getAllTables);
-router.get('/co/lohang/:lohangDraftId/tables/products', verifyToken, requireRole('STAFF'), extractedTablesController.getProductTable);
-router.get('/co/lohang/:lohangDraftId/tables/npl', verifyToken, requireRole('STAFF'), extractedTablesController.getNplTable);
-router.get('/co/lohang/:lohangDraftId/tables/bom', verifyToken, requireRole('STAFF'), extractedTablesController.getBomTable);
+
+// C/O Tables Edit - STAFF only
 router.put('/co/lohang/:lohangDraftId/tables/products/:productIndex', verifyToken, requireRole('STAFF'), extractedTablesController.updateProductInTable);
 router.put('/co/lohang/:lohangDraftId/tables/npl/:nplIndex', verifyToken, requireRole('STAFF'), extractedTablesController.updateNplInTable);
 router.put('/co/lohang/:lohangDraftId/tables/bom/:bomIndex', verifyToken, requireRole('STAFF'), extractedTablesController.updateBomInTable);
 router.put('/co/lohang/:lohangDraftId/tables/confirm', verifyToken, requireRole('STAFF'), extractedTablesController.confirmAllTables);
+
+// C/O Reports - STAFF only (write), STAFF + MOIT (read)
 router.post('/co/lohang/:lohangDraftId/ctc-reports', verifyToken, requireRole('STAFF'), ctcReportController.generateCTCReports);
 router.post('/co/lohang/:lohangDraftId/ctc-reports/retry', verifyToken, requireRole('STAFF'), ctcReportController.retryCTCReports);
-router.get('/co/lohang/:lohangDraftId/ctc-reports', verifyToken, requireRole('STAFF'), ctcReportController.getCTCReports);
 router.delete('/co/lohang/:lohangDraftId/ctc-reports/:skuCode', verifyToken, requireRole('STAFF'), ctcReportController.deleteCTCReport);
 router.post('/co/lohang/:lohangDraftId/complete', verifyToken, requireRole('STAFF'), ctcReportController.completeCOProcess);
 router.post('/co/lohang/:lohangDraftId/back-to-step/:stepNumber', verifyToken, requireRole('STAFF'), ctcReportController.backToStep);
-router.get('/co/listbct', verifyToken, requireRole('MOIT'), coProcessController.listCO);
 
 
 module.exports = router;

@@ -4,7 +4,6 @@ const { getGeminiService } = require('../../core/utils/gemini.utils');
 const { getDataExtractorService } = require('../../core/utils/dataExtractor.utils');
 const { getBomExcelParser } = require('../../core/utils/bomExcelParser.utils');
 
-// Import models
 const LohangDraftClass = require('../models/lohangDraft.model');
 const DocumentClass = require('../models/document.model');
 const ExtractedProductTableClass = require('../models/extractedProductTable.model');
@@ -27,9 +26,6 @@ const ExtractedNplTable = buildModelFromClass(ExtractedNplTableClass);
 const ExtractedBomTable = buildModelFromClass(ExtractedBomTableClass);
 const NplConsumptionDetail = buildModelFromClass(NplConsumptionDetailClass);
 
-/**
- * Lấy chi tiết lô hàng
- */
 async function getLohangDetail(lohangDraftId) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
   if (!lohangDraft) {
@@ -38,7 +34,6 @@ async function getLohangDetail(lohangDraftId) {
     throw err;
   }
 
-  // Lấy workflow info
   const workflowInfo = getWorkflowInfo(lohangDraft);
 
   return {
@@ -47,17 +42,38 @@ async function getLohangDetail(lohangDraftId) {
   };
 }
 
-/**
- * Danh sách C/O (draft + hoàn thành)
- * GET /api/v1/co/list
- */
 async function listCO(userId, query) {
-  const { status, invoiceNo, formType, page = 1, limit = 20 } = query;
+  const { 
+    status, 
+    invoiceNo, 
+    formType, 
+    exportDeclarationNo,
+    fromDate,
+    toDate,
+    page = 1, 
+    limit = 20 
+  } = query;
   
   const filter = {};
   if (status) filter.status = status;
   if (invoiceNo) filter.invoiceNo = { $regex: invoiceNo, $options: 'i' };
   if (formType) filter.formType = formType;
+  if (exportDeclarationNo) filter.exportDeclarationNo = { $regex: exportDeclarationNo, $options: 'i' };
+  
+  // Search theo ngày hóa đơn (invoiceDate)
+  if (fromDate || toDate) {
+    filter.invoiceDate = {};
+    if (fromDate) {
+      const from = new Date(fromDate);
+      from.setHours(0, 0, 0, 0);
+      filter.invoiceDate.$gte = from;
+    }
+    if (toDate) {
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999);
+      filter.invoiceDate.$lte = to;
+    }
+  }
 
   const skip = (page - 1) * limit;
   
@@ -71,7 +87,6 @@ async function listCO(userId, query) {
     LohangDraft.countDocuments(filter)
   ]);
 
-  // Lấy bundleName từ documents
   const BundleClass = require('../models/bundle.model');
   const Bundle = buildModelFromClass(BundleClass);
   
@@ -85,8 +100,13 @@ async function listCO(userId, query) {
       }
     }
     
-    // Thêm trạng thái step hiện tại (tiếng Việt)
+    // Thêm thông tin chi tiết để trả về
     co.statusText = constants.CO_STEP_VI[co.currentStep] || `Step ${co.currentStep}`;
+    co.invoiceNo = co.invoiceNo || 'N/A';
+    co.exportDeclarationNo = co.exportDeclarationNo || 'N/A';
+    co.invoiceDate = co.invoiceDate ? new Date(co.invoiceDate).toLocaleDateString('vi-VN') : 'N/A';
+    co.formType = co.formType || 'N/A';
+    co.criterionType = co.criterionType || 'N/A';
   }
 
   return {
@@ -100,9 +120,7 @@ async function listCO(userId, query) {
   };
 }
 
-/**
- * Lấy danh sách Form và Tiêu chí được hỗ trợ
- */
+
 function getSupportedCombinations() {
   const supportedCombinations = [
     {
@@ -138,9 +156,6 @@ function getSupportedCombinations() {
   };
 }
 
-/**
- * Cập nhật document trong bundle
- */
 async function updateDocument(bundleId, documentId, payload) {
   const { fileName, storagePath, note, documentType, ocrPages } = payload;
 
@@ -168,9 +183,6 @@ async function updateDocument(bundleId, documentId, payload) {
   return { document: updated };
 }
 
-/**
- * Xoá document khỏi bundle
- */
 async function deleteDocument(bundleId, documentId) {
   const document = await Document.findOne({ _id: documentId, bundleId }).lean();
   if (!document) {
@@ -191,10 +203,6 @@ async function deleteDocument(bundleId, documentId) {
   };
 }
 
-/**
- * Tạo C/O draft từ bundle (chỉ cần bundleId)
- * POST /api/v1/co/create
- */
 async function createCOFromBundle(userId, payload) {
   const { bundleId } = payload;
   
@@ -204,7 +212,6 @@ async function createCOFromBundle(userId, payload) {
     throw err;
   }
 
-  // Lấy bundle và documents
   const BundleClass = require('../models/bundle.model');
   const Bundle = buildModelFromClass(BundleClass);
   
@@ -215,14 +222,12 @@ async function createCOFromBundle(userId, payload) {
     throw err;
   }
 
-  // Kiểm tra bundle đã OCR xong chưa
   if (bundle.status !== 'OCR_COMPLETED' && bundle.status !== 'APPROVED') {
     const err = new Error('Bundle chưa hoàn thành OCR');
     err.status = constants.HTTP_STATUS.BAD_REQUEST;
     throw err;
   }
 
-  // Lấy tất cả documents trong bundle
   const documents = await Document.find({ bundleId }).lean();
   
   if (!documents || documents.length === 0) {
@@ -231,31 +236,84 @@ async function createCOFromBundle(userId, payload) {
     throw err;
   }
 
-  // Tìm invoice document để lấy invoiceNo
   const invoiceDoc = documents.find(d => 
     d.documentType === 'COMMERCIAL_INVOICE' || 
     d.documentType === 'INVOICE'
   );
 
+  const exportDeclarationDoc = documents.find(d => 
+    d.documentType === 'EXPORT_DECLARATION'
+  );
+
+  // Extract invoiceNo
   let invoiceNo = 'DRAFT-' + Date.now();
-  if (invoiceDoc && invoiceDoc.ocrData?.fullText) {
-    // Thử trích xuất invoiceNo từ OCR (đơn giản)
-    const invoiceMatch = invoiceDoc.ocrData.fullText.match(/Invoice\s*No[.:]?\s*([A-Z0-9-]+)/i);
+  let invoiceDate = null;
+  if (invoiceDoc && invoiceDoc.ocrResult) {
+    const invoiceMatch = invoiceDoc.ocrResult.match(/Invoice\s*No[.:]?\s*([A-Z0-9-]+)/i);
     if (invoiceMatch) {
       invoiceNo = invoiceMatch[1];
     }
+    
+    // Extract invoiceDate (try multiple patterns)
+    const datePatterns = [
+      /Date[.:]?\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i,
+      /(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/,
+      /Invoice\s*Date[.:]?\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i
+    ];
+    
+    for (const pattern of datePatterns) {
+      const dateMatch = invoiceDoc.ocrResult.match(pattern);
+      if (dateMatch) {
+        try {
+          invoiceDate = new Date(dateMatch[1]);
+          if (!isNaN(invoiceDate.getTime())) break;
+        } catch (e) {
+          // Continue to next pattern
+        }
+      }
+    }
   }
 
-  // Tạo C/O draft - Bắt đầu từ bước 1 (chưa có form data)
+  // Extract exportDeclarationNo
+  let exportDeclarationNo = null;
+  if (exportDeclarationDoc && exportDeclarationDoc.ocrResult) {
+    console.log('=== DEBUG EXPORT DECLARATION ===');
+    console.log('OCR Result length:', exportDeclarationDoc.ocrResult.length);
+    console.log('OCR Result preview:', exportDeclarationDoc.ocrResult.substring(0, 500));
+    
+    const declarationPatterns = [
+      /Số\s*khai\s*xuất\s*khẩu[.:]?\s*([A-Z0-9\-\/]+)/i,
+      /Export\s*Declaration\s*No[.:]?\s*([A-Z0-9\-\/]+)/i,
+      /Khai\s*xuất\s*khẩu[.:]?\s*([A-Z0-9\-\/]+)/i,
+      /khai\s*xuất[.:]?\s*([A-Z0-9\-\/]+)/i,
+      /declaration[.:]?\s*([A-Z0-9\-\/]+)/i,
+      /([A-Z0-9]{2,}[-\/]\d{4,})/
+    ];
+    
+    for (let i = 0; i < declarationPatterns.length; i++) {
+      const pattern = declarationPatterns[i];
+      const declMatch = exportDeclarationDoc.ocrResult.match(pattern);
+      console.log(`Pattern ${i}:`, pattern, '=> Match:', declMatch ? declMatch[1] : 'NO MATCH');
+      if (declMatch) {
+        exportDeclarationNo = declMatch[1];
+        console.log('Found exportDeclarationNo:', exportDeclarationNo);
+        break;
+      }
+    }
+  } else {
+    console.log('=== NO EXPORT DECLARATION DOC ===');
+    console.log('exportDeclarationDoc:', exportDeclarationDoc);
+  }
+
   const lohangDraft = await LohangDraft.create({
     companyId: bundle.companyId,
     staffUser: userId,
     status: 'DRAFT',
-    currentStep: 1, // Luôn bắt đầu từ bước 1
+    currentStep: 1, 
     invoiceNo,
+    invoiceDate,
+    exportDeclarationNo,
     linkedDocuments: documents.map(d => d._id),
-    // Chưa có formType, exchangeRate, criterionType
-    // User sẽ điền ở bước 2
     totalSkuCount: 0,
     processedSkuCount: 0
   });
@@ -277,11 +335,6 @@ async function createCOFromBundle(userId, payload) {
   };
 }
 
-/**
- * Setup Form E/B và Tiêu chí (sau khi upload bổ sung xong)
- * PUT /api/v1/co/lohang/:id/setup
- * CHỈ lưu cấu hình, KHÔNG extract data
- */
 async function setupFormAndCriteria(lohangDraftId, payload) {
   const { formType, criterionType } = payload;
   
@@ -298,13 +351,11 @@ async function setupFormAndCriteria(lohangDraftId, payload) {
     throw err;
   }
 
-  // Cập nhật cấu hình và workflow
-  // Sau khi setup form xong → Tự động chuyển sang bước 3
   await LohangDraft.findByIdAndUpdate(lohangDraftId, {
     formType,
     criterionType,
     status: 'SETUP_COMPLETED',
-    currentStep: 3, // Tự động chuyển sang bước 3
+    currentStep: 3, 
     'workflowSteps.step2_selectFormAndCriteria.completed': true,
     'workflowSteps.step2_selectFormAndCriteria.completedAt': new Date(),
     updatedAt: new Date()
@@ -324,11 +375,6 @@ async function setupFormAndCriteria(lohangDraftId, payload) {
   };
 }
 
-/**
- * Continue to next step (Chuyển bước) - TỔNG HỢP TẤT CẢ
- * POST /api/v1/co/lohang/:id/continue
- * Body: { formType, exchangeRate, criterionType, tables } (tùy bước)
- */
 async function continueToNextStep(lohangDraftId, payload = {}) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
   if (!lohangDraft) {
@@ -338,45 +384,34 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
   }
 
   const currentStep = lohangDraft.currentStep || 1;
-  console.log(`📍 Continue from step ${currentStep} (status: ${lohangDraft.status})`);
-  console.log('📦 Payload:', payload);
   
   let nextStep = currentStep;
   let updates = { updatedAt: new Date() };
 
-  // Logic chuyển bước
   if (currentStep === 1) {
-    // Bước 1 → Bước 2: Upload xong → Hiển thị form để user điền
     nextStep = 2;
     updates.currentStep = 2;
     updates['workflowSteps.step1_uploadDocuments.completed'] = true;
     updates['workflowSteps.step1_uploadDocuments.completedAt'] = new Date();
   } else if (currentStep === 2) {
-    // Bước 2 → Bước 3: Lưu form + Trigger extraction
     const { formType, criterionType } = payload;
     
-    // Validate payload
     if (!formType || !criterionType) {
       const err = new Error('Thiếu thông tin Form hoặc Tiêu chí');
       err.status = constants.HTTP_STATUS.BAD_REQUEST;
       throw err;
     }
     
-    // Validation: Chỉ hỗ trợ FORM_E + CTH
     if (formType !== 'FORM_E' || criterionType !== 'CTH') {
       const err = new Error(`Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`);
       err.status = constants.HTTP_STATUS.BAD_REQUEST;
       throw err;
     }
 
-    // Xóa data cũ trước khi extraction lại
-    console.log('🗑️ Clearing old extracted tables...');
     await ExtractedProductTable.deleteMany({ lohangDraftId });
     await ExtractedNplTable.deleteMany({ lohangDraftId });
     await ExtractedBomTable.deleteMany({ lohangDraftId });
-    console.log('✅ Cleared old tables');
 
-    // Lưu config
     nextStep = 3;
     updates.currentStep = 3;
     updates.status = 'EXTRACTING';
@@ -386,27 +421,18 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
     updates['workflowSteps.step2_selectFormAndCriteria.completedAt'] = new Date();
     updates['workflowSteps.step3_extractData.inProgress'] = true;
 
-    // Cập nhật trước
     await LohangDraft.findByIdAndUpdate(lohangDraftId, updates);
 
-    // Tự động trigger extraction
-    console.log('🔄 Auto-triggering table extraction...');
-    console.log(`📦 Bundle ID: ${lohangDraft.bundleId}, Lohang Draft ID: ${lohangDraftId}`);
-    
+
     try {
-      console.log('⏳ Calling extractDataFromDocuments...');
       const extractResult = await extractDataFromDocuments(lohangDraftId);
-      console.log('✅ Extraction completed:', extractResult);
       
       const updated = await LohangDraft.findById(lohangDraftId).lean();
       const workflowInfo = getWorkflowInfo(updated);
 
-      // Load 3 bảng để trả về luôn
       const productTable = await ExtractedProductTable.findOne({ lohangDraftId }).lean();
       const nplTable = await ExtractedNplTable.findOne({ lohangDraftId }).lean();
       const bomTable = await ExtractedBomTable.findOne({ lohangDraftId }).lean();
-
-      console.log(`📊 Loaded tables - Product: ${!!productTable}, NPL: ${!!nplTable}, BOM: ${!!bomTable}`);
 
       return {
         _id: updated._id,
@@ -421,7 +447,6 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
         message: 'Đã lưu cấu hình, trích xuất và chuyển sang bước 3'
       };
     } catch (error) {
-      console.error('❌ Extraction error:', error);
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         status: 'EXTRACTION_FAILED',
         'workflowSteps.step3_extractData.inProgress': false,
@@ -441,24 +466,14 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
       };
     }
   } else if (currentStep === 3) {
-    // Bước 3 → Bước 4: Lưu tables (nếu có edit) + Chuyển sang bước 4 (chưa tính toán)
     const { tables, reExtract } = payload;
     
-    // Nếu user muốn tạo lại bảng từ documents (re-extract)
-    if (reExtract) {
-      console.log('🔄 Step 3: Re-extracting tables from documents...');
-      
-      // Xóa bảng cũ
+    if (reExtract) {      
       await ExtractedProductTable.deleteMany({ lohangDraftId });
       await ExtractedNplTable.deleteMany({ lohangDraftId });
-      await ExtractedBomTable.deleteMany({ lohangDraftId });
-      console.log('🗑️ Cleared old extracted tables');
-      
-      // Gọi extraction lại
+      await ExtractedBomTable.deleteMany({ lohangDraftId });      
       await triggerExtractTables(lohangDraftId);
-      console.log('✅ Re-extraction completed');
     } else if (tables) {
-      // Nếu user edit tables, lưu lại
       if (tables.productTable) {
         await ExtractedProductTable.findOneAndUpdate(
           { lohangDraftId },
@@ -477,10 +492,8 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
           { ...tables.bomTable, updatedAt: new Date() }
         );
       }
-      console.log('✅ Đã lưu tables đã chỉnh sửa');
     }
 
-    // Kiểm tra đã có đủ 3 bảng
     const productTable = await ExtractedProductTable.findOne({ lohangDraftId }).lean();
     const nplTable = await ExtractedNplTable.findOne({ lohangDraftId }).lean();
     const bomTable = await ExtractedBomTable.findOne({ lohangDraftId }).lean();
@@ -496,26 +509,19 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
     updates.status = 'CALCULATING';
     updates['workflowSteps.step3_extractData.completed'] = true;
     updates['workflowSteps.step3_extractData.completedAt'] = new Date();
-    updates['workflowSteps.step4_calculate.inProgress'] = true; // Bắt đầu calculation ngay
+    updates['workflowSteps.step4_calculate.inProgress'] = true; 
 
-    // Cập nhật trước khi calculation
     await LohangDraft.findByIdAndUpdate(lohangDraftId, updates);
-    
-    console.log('🔄 Step 3→4: Clearing old consumption data and auto-running calculation...');
-    
-    // Xóa data consumption cũ để tạo mới (tránh đè lên)
+        
     await NplConsumptionDetail.deleteMany({ lohangDraftId });
-    console.log('🗑️ Cleared old consumption details');
     
     try {
-      // Chạy calculation ngay lập tức
       const calculationResult = await calculateConsumptionAndFifo(lohangDraftId);
       
       if (!calculationResult.success) {
         throw new Error(calculationResult.message);
       }
       
-      // Cập nhật thành công calculation
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         status: 'CALCULATED_WITH_WARNINGS',
         'workflowSteps.step4_calculate.completed': true,
@@ -526,7 +532,6 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
       const updated = await LohangDraft.findById(lohangDraftId).lean();
       const workflowInfo = getWorkflowInfo(updated);
       
-      // Load consumption details để trả về
       const consumptionDetails = await NplConsumptionDetail.find({ lohangDraftId }).lean();
 
       return {
@@ -549,7 +554,6 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
     } catch (calculationError) {
       console.error('❌ Auto-calculation failed:', calculationError);
       
-      // Cập nhật lỗi calculation
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         status: 'CALCULATION_FAILED',
         'workflowSteps.step4_calculate.inProgress': false,
@@ -577,15 +581,9 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
     const { reCalculate } = payload;
     const details = await NplConsumptionDetail.find({ lohangDraftId }).lean();
     
-    // Nếu user muốn tạo lại calculation (re-calculate)
-    if (reCalculate) {
-      console.log('🔄 Step 4: Re-calculating consumption data...');
-      
-      // Xóa data cũ
+    if (reCalculate) {      
       await NplConsumptionDetail.deleteMany({ lohangDraftId });
-      console.log('🗑️ Cleared old consumption details');
       
-      // Set inProgress = true
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         'workflowSteps.step4_calculate.inProgress': true,
         updatedAt: new Date()
@@ -593,12 +591,10 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
       
       try {
         const calcResult = await calculateConsumptionAndFifo(lohangDraftId);
-        console.log('✅ Re-calculation completed');
         
         const updated = await LohangDraft.findById(lohangDraftId).lean();
         const workflowInfo = getWorkflowInfo(updated);
         
-        // Load lại bảng sau khi tính toán
         const newDetails = await NplConsumptionDetail.find({ lohangDraftId })
           .sort({ skuCode: 1, tenHang: 1, allocationOrder: 1 })
           .lean();
@@ -619,10 +615,7 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
         throw error;
       }
     } else if (details.length === 0) {
-      // Nếu chưa có calculation data, chạy calculation trước
-      console.log('🔄 Step 4: Running calculation first...');
       
-      // Set inProgress = true trước khi bắt đầu
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         'workflowSteps.step4_calculate.inProgress': true,
         updatedAt: new Date()
@@ -630,12 +623,10 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
       
       try {
         const calcResult = await calculateConsumptionAndFifo(lohangDraftId);
-        console.log('✅ Calculation completed');
         
         const updated = await LohangDraft.findById(lohangDraftId).lean();
         const workflowInfo = getWorkflowInfo(updated);
         
-        // Load lại bảng sau khi tính toán
         const newDetails = await NplConsumptionDetail.find({ lohangDraftId })
           .sort({ skuCode: 1, tenHang: 1, allocationOrder: 1 })
           .lean();
@@ -657,52 +648,36 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
       }
     }
     
-    // Nếu đã có calculation data → Chuyển sang bước 5 và tạo reports
-    console.log('🔄 Step 4→5: Clearing old reports and generating new ones...');
     
-    // Lấy thông tin lô hàng để kiểm tra tiêu chí
     const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
     
-    // Xóa reports cũ để tạo mới (tránh đè lên)
     await LohangDraft.findByIdAndUpdate(lohangDraftId, { ctcReports: [] });
-    console.log('🗑️ Cleared old reports');
     
     let ctcReportsResult = null;
     
-    // Tạo bảng kê cho tất cả tiêu chí
     const supportedCriteria = ['CTC', 'CTH', 'CTSH', 'RVC40', 'RVC50', 'WO', 'PE'];
-    if (supportedCriteria.includes(lohangDraft.criterionType)) {
-      console.log(`🔄 Generating reports for criterion type: ${lohangDraft.criterionType}`);
-      
-      try {
+    try {
         const ReportGeneratorService = require('../../core/services/ReportGenerator.service');
         const reportService = new ReportGeneratorService();
         ctcReportsResult = await reportService.generateReports(lohangDraftId);
         
-        console.log(`✅ Generated ${ctcReportsResult.totalReports} reports for ${lohangDraft.criterionType}`);
       } catch (reportError) {
         console.error('❌ Report generation failed:', reportError);
-        // Throw error vì đây là bước chính để tạo bảng kê
         throw new Error(`Lỗi tạo bảng kê ${lohangDraft.criterionType}: ${reportError.message}`);
       }
-    } else {
-      console.log(`ℹ️ Criterion type ${lohangDraft.criterionType} is not supported yet`);
-    }
     
-    // Cập nhật trạng thái chuyển sang bước 5
     await LohangDraft.findByIdAndUpdate(lohangDraftId, {
       'workflowSteps.step4_calculate.completed': true,
       'workflowSteps.step4_calculate.completedAt': new Date(),
       'workflowSteps.step4_calculate.inProgress': false,
       'workflowSteps.step5_generateReports.inProgress': true,
-      currentStep: 5, // Chuyển sang bước 5
+      currentStep: 5, 
       updatedAt: new Date()
     });
     
     const updated = await LohangDraft.findById(lohangDraftId).lean();
     const workflowInfo = getWorkflowInfo(updated);
     
-    // Load lại consumption details
     const consumptionDetails = await NplConsumptionDetail.find({ lohangDraftId })
       .sort({ skuCode: 1, tenHang: 1, allocationOrder: 1 })
       .lean();
@@ -728,29 +703,22 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
   } else if (currentStep === 5) {
     const { reGenerateReports } = payload;
     
-    // Nếu user muốn tạo lại reports (re-generate)
     if (reGenerateReports) {
-      console.log('🔄 Step 5: Re-generating reports...');
       
-      // Xóa reports cũ
       await LohangDraft.findByIdAndUpdate(lohangDraftId, { ctcReports: [] });
-      console.log('🗑️ Cleared old reports');
       
-      // Lấy thông tin lô hàng
       const lohangDraftForReGen = await LohangDraft.findById(lohangDraftId).lean();
       
       let ctcReportsResult = null;
       const supportedCriteria = ['CTC', 'CTH', 'CTSH', 'RVC40', 'RVC50', 'WO', 'PE'];
       
       if (supportedCriteria.includes(lohangDraftForReGen.criterionType)) {
-        console.log(`🔄 Re-generating reports for criterion type: ${lohangDraftForReGen.criterionType}`);
         
         try {
           const ReportGeneratorService = require('../../core/services/ReportGenerator.service');
           const reportService = new ReportGeneratorService();
           ctcReportsResult = await reportService.generateReports(lohangDraftId);
           
-          console.log(`✅ Re-generated ${ctcReportsResult.totalReports} reports for ${lohangDraftForReGen.criterionType}`);
         } catch (reportError) {
           console.error('❌ Report re-generation failed:', reportError);
           throw new Error(`Lỗi tạo lại bảng kê ${lohangDraftForReGen.criterionType}: ${reportError.message}`);
@@ -773,10 +741,7 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
         message: `Đã tạo lại ${ctcReportsResult?.totalReports || 0} bảng kê. Có thể xác nhận hoàn thành.`
       };
     } else {
-      // Step 5 → 6: User xác nhận hoàn thành step 5
-      console.log('✅ Step 5: Confirming report generation completion...');
       
-      // Mark step 5 completed và chuyển sang step 6
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         'workflowSteps.step5_generateReports.completed': true,
         'workflowSteps.step5_generateReports.completedAt': new Date(),
@@ -785,9 +750,7 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
         status: 'REPORTS_GENERATED',
         updatedAt: new Date()
       });
-      
-      console.log('✅ Step 5 completed, moved to Step 6');
-      
+            
       const updated = await LohangDraft.findById(lohangDraftId).lean();
       const workflowInfo = getWorkflowInfo(updated);
       
@@ -805,7 +768,6 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
       };
     }
   } else {
-    // Các bước khác
     console.error(`❌ Cannot continue from step ${currentStep}`);
     console.error('LohangDraft status:', lohangDraft.status);
     console.error('WorkflowSteps:', JSON.stringify(lohangDraft.workflowSteps, null, 2));
@@ -815,7 +777,6 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
     throw err;
   }
 
-  // Cập nhật
   await LohangDraft.findByIdAndUpdate(lohangDraftId, updates);
 
   const updated = await LohangDraft.findById(lohangDraftId).lean();
@@ -830,10 +791,6 @@ async function continueToNextStep(lohangDraftId, payload = {}) {
   };
 }
 
-/**
- * Setup Form + Trigger Extract cùng lúc (Tối ưu UX)
- * POST /api/v1/co/lohang/:id/setup-and-extract
- */
 async function setupAndExtract(lohangDraftId, payload) {
   const { formType, criterionType } = payload;
   
@@ -850,14 +807,12 @@ async function setupAndExtract(lohangDraftId, payload) {
     throw err;
   }
 
-  // Kiểm tra đang extract hay chưa (prevent spam)
   if (lohangDraft.workflowSteps?.step3_extractData?.inProgress) {
     const err = new Error('Đang trích xuất dữ liệu, vui lòng đợi');
     err.status = constants.HTTP_STATUS.TOO_MANY_REQUESTS;
     throw err;
   }
 
-  // Cập nhật form + workflow + bắt đầu extract
   await LohangDraft.findByIdAndUpdate(lohangDraftId, {
     formType,
     criterionType,
@@ -869,7 +824,6 @@ async function setupAndExtract(lohangDraftId, payload) {
     updatedAt: new Date()
   });
 
-  // Bắt đầu trích xuất dữ liệu async
   setImmediate(() => {
     extractDataFromDocuments(lohangDraftId)
       .catch(err => console.error('Extract data error:', err));
@@ -886,10 +840,6 @@ async function setupAndExtract(lohangDraftId, payload) {
   };
 }
 
-/**
- * Trigger trích xuất và tổng hợp dữ liệu (khi nhân viên bấm "Tiếp tục")
- * POST /api/v1/co/lohang/:id/extract-tables
- */
 async function triggerExtractTables(lohangDraftId) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
   if (!lohangDraft) {
@@ -898,28 +848,24 @@ async function triggerExtractTables(lohangDraftId) {
     throw err;
   }
 
-  // Kiểm tra đã setup form chưa (bước 2)
   if (!lohangDraft.formType || !lohangDraft.exchangeRate || !lohangDraft.criterionType) {
     const err = new Error('Vui lòng chọn Form và Tiêu chí trước (Bước 2)');
     err.status = constants.HTTP_STATUS.BAD_REQUEST;
     throw err;
   }
 
-  // Kiểm tra đang extract hay chưa (prevent spam)
   if (lohangDraft.workflowSteps?.step3_extractData?.inProgress) {
     const err = new Error('Đang trích xuất dữ liệu, vui lòng đợi');
     err.status = constants.HTTP_STATUS.TOO_MANY_REQUESTS;
     throw err;
   }
 
-  // Cập nhật status và workflow
   await LohangDraft.findByIdAndUpdate(lohangDraftId, {
     status: 'DATA_EXTRACTING',
     'workflowSteps.step3_extractData.inProgress': true,
     updatedAt: new Date()
   });
 
-  // Bắt đầu trích xuất dữ liệu async
   setImmediate(() => {
     extractDataFromDocuments(lohangDraftId)
       .catch(err => console.error('Extract data error:', err));
@@ -933,10 +879,6 @@ async function triggerExtractTables(lohangDraftId) {
   };
 }
 
-/**
- * Trích xuất dữ liệu từ documents (Invoice, BOM, VAT Invoice, Export Declaration)
- * Sử dụng AI để tổng hợp dữ liệu dạng bảng
- */
 async function extractDataFromDocuments(lohangDraftId) {
   const errors = [];
   let currentStep = '';
@@ -945,10 +887,6 @@ async function extractDataFromDocuments(lohangDraftId) {
     const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
     if (!lohangDraft) return;
 
-    console.log('LohangDraft linkedDocuments:', lohangDraft.linkedDocuments?.length || 0);
-    console.log('LinkedDocument IDs:', lohangDraft.linkedDocuments?.map(id => id.toString()));
-
-    // ✅ REFRESH: Query tất cả documents từ bundle để đảm bảo có BOM mới upload
     let bundleId = lohangDraft.linkedDocuments?.[0] 
       ? (await Document.findById(lohangDraft.linkedDocuments[0]).lean())?.bundleId
       : null;
@@ -956,17 +894,12 @@ async function extractDataFromDocuments(lohangDraftId) {
     let documents = [];
     
     if (bundleId) {
-      // Query tất cả documents trong bundle (bao gồm cả BOM mới upload)
       documents = await Document.find({ bundleId: bundleId }).lean();
-      console.log('📦 Refreshed documents from bundle:', documents.length);
     } else {
-      // Fallback: Dùng linkedDocuments từ lohangDraft
       documents = await Document.find({
         _id: { $in: lohangDraft.linkedDocuments }
       }).lean();
-      console.log('Found documents from linkedDocuments:', documents.length);
       
-      // Lấy bundleId từ document đầu tiên
       const firstDoc = documents[0];
       bundleId = firstDoc?.bundleId;
     }
@@ -974,9 +907,6 @@ async function extractDataFromDocuments(lohangDraftId) {
     const extractor = getDataExtractorService();
     const BundleClass = require('../models/bundle.model');
     const Bundle = buildModelFromClass(BundleClass);
-
-    // Phân loại documents theo đúng enum trong model
-    console.log('Documents:', documents.map(d => ({ id: d._id, type: d.documentType, hasOcr: !!d.ocrResult, isExcel: !!d.isExcelFile })));
 
     const invoiceDoc = documents.find(d => 
       d.documentType === 'COMMERCIAL_INVOICE'
@@ -992,14 +922,6 @@ async function extractDataFromDocuments(lohangDraftId) {
     
     const bomDocs = documents.filter(d => d.documentType === 'BOM');
 
-    console.log('Classified documents:', {
-      hasInvoice: !!invoiceDoc,
-      hasDeclaration: !!declarationDoc,
-      vatInvoiceCount: vatInvoiceDocs.length,
-      bomCount: bomDocs.length
-    });
-
-    // ✅ GIAI ĐOẠN 0: Parse BOM Excel trước (nếu có) - Không cần SKU list
     let parsedBomData = null;
     let bomExcelUrl = null;
     
@@ -1010,16 +932,10 @@ async function extractDataFromDocuments(lohangDraftId) {
       if (bomExcelUrl && (bomExcelUrl.endsWith('.xlsx') || bomExcelUrl.endsWith('.xls'))) {
         try {
           currentStep = 'PARSE_BOM_EXCEL';
-          console.log('🔄 Step 0: Parsing BOM Excel first...');
-          console.log('Excel URL:', bomExcelUrl);
           
           const bomParser = getBomExcelParser();
           parsedBomData = await bomParser.parseBomExcel(bomExcelUrl);
           
-          console.log('✅ BOM Excel parsed:', {
-            totalMaterials: parsedBomData.totalMaterials,
-            totalSkus: parsedBomData.totalSkus
-          });
         } catch (error) {
           console.error('Parse BOM Excel error:', error);
           errors.push({
@@ -1031,18 +947,15 @@ async function extractDataFromDocuments(lohangDraftId) {
       }
     }
 
-    // GIAI ĐOẠN 1: Extract Bảng Tổng hợp Sản phẩm Xuất khẩu
     if (invoiceDoc) {
       try {
         currentStep = 'EXTRACT_PRODUCT_TABLE';
-        console.log('Extracting product table...');
         const productTableData = await extractor.extractProductTable(
           invoiceDoc,
           declarationDoc,
           lohangDraft.exchangeRate
         );
 
-      // Lưu vào DB
       await ExtractedProductTable.findOneAndUpdate(
         { lohangDraftId: lohangDraft._id },
         {
@@ -1056,7 +969,6 @@ async function extractDataFromDocuments(lohangDraftId) {
         { upsert: true, new: true }
       );
 
-      console.log(`Extracted ${productTableData.products.length} products`);
       } catch (error) {
         console.error('Extract product table error:', error);
         errors.push({
@@ -1067,14 +979,11 @@ async function extractDataFromDocuments(lohangDraftId) {
       }
     }
 
-    // GIAI ĐOẠN 2: Extract Bảng Nhập kho NPL
     if (vatInvoiceDocs.length > 0) {
       try {
         currentStep = 'EXTRACT_NPL_TABLE';
-        console.log('Extracting NPL table...');
         const nplTableData = await extractor.extractNplTable(vatInvoiceDocs);
 
-        // Thêm stt cho từng item trong materials array trước khi lưu vào DB
         if (nplTableData.materials && Array.isArray(nplTableData.materials)) {
           nplTableData.materials = nplTableData.materials.map((material, index) => ({
             stt: index + 1,
@@ -1082,7 +991,6 @@ async function extractDataFromDocuments(lohangDraftId) {
           }));
         }
 
-        // Lưu vào DB
         await ExtractedNplTable.findOneAndUpdate(
           { lohangDraftId: lohangDraft._id },
           {
@@ -1096,7 +1004,6 @@ async function extractDataFromDocuments(lohangDraftId) {
           { upsert: true, new: true }
         );
 
-        console.log(`Extracted ${nplTableData.materials.length} NPL items`);
       } catch (error) {
         console.error('Extract NPL table error:', error);
         errors.push({
@@ -1107,13 +1014,10 @@ async function extractDataFromDocuments(lohangDraftId) {
       }
     }
 
-    // GIAI ĐOẠN 3: Transform BOM data với SKU list từ Product Table
     if (bomDocs.length > 0) {
       try {
         currentStep = 'EXTRACT_BOM_TABLE';
-        console.log('Step 3: Processing BOM table...');
         
-        // Lấy danh sách SKU từ product table 
         const productTable = await ExtractedProductTable.findOne({ 
           lohangDraftId: lohangDraft._id 
         }).lean();
@@ -1127,25 +1031,17 @@ async function extractDataFromDocuments(lohangDraftId) {
           let bomTableData;
           
           if (parsedBomData) {
-            // ✅ Đã parse Excel ở Step 0 → Chỉ cần transform với SKU list
-            console.log('🔄 Transforming BOM Excel data with SKU list...');
             
             const bomParser = getBomExcelParser();
             bomTableData = bomParser.transformToBomTable(parsedBomData, skuList);
-            
-            // Thêm bomExcelUrl vào data
             bomTableData.bomExcelUrl = bomExcelUrl;
             bomTableData.aiModel = 'EXCEL_UPLOAD';
             bomTableData.aiConfidence = 100;
             
-            console.log('✅ BOM data transformed successfully');
           } else {
-            // ❌ BOM là PDF/Image → Dùng AI OCR (legacy)
-            console.log('⚠️ BOM is not Excel, using AI OCR (legacy)...');
             bomTableData = await extractor.extractBomTable(bomDocs, skuList);
           }
 
-          // Lưu vào DB
           await ExtractedBomTable.findOneAndUpdate(
             { lohangDraftId: lohangDraft._id },
             {
@@ -1158,8 +1054,6 @@ async function extractDataFromDocuments(lohangDraftId) {
             },
             { upsert: true, new: true }
           );
-
-          console.log(`✅ Saved BOM: ${bomTableData.totalMaterials} materials, ${bomTableData.totalSkus} SKUs`);
         }
       } catch (error) {
         console.error('Extract BOM table error:', error);
@@ -1171,12 +1065,10 @@ async function extractDataFromDocuments(lohangDraftId) {
       }
     }
 
-    // Cập nhật status lô hàng
     const productTable = await ExtractedProductTable.findOne({ lohangDraftId: lohangDraft._id }).lean();
     const skuCount = productTable?.products?.length || 0;
     
     if (errors.length > 0) {
-      // Có lỗi trong quá trình extract
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         totalSkuCount: skuCount,
         status: 'EXTRACTION_FAILED',
@@ -1184,13 +1076,11 @@ async function extractDataFromDocuments(lohangDraftId) {
         'workflowSteps.step3_extractData.inProgress': false,
         updatedAt: new Date()
       });
-      console.log('Data extraction completed with errors:', errors);
     } else {
-      // Thành công hoàn toàn - Hoàn thành bước 3, chờ user bấm tiếp tục
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         totalSkuCount: skuCount,
-        status: 'EXTRACTED', // Hoàn thành extraction, chưa ready to calculate
-        currentStep: 3, // Vẫn ở bước 3, chờ user bấm tiếp tục
+        status: 'EXTRACTED', 
+        currentStep: 3, 
         extractionErrors: [],
         'workflowSteps.step3_extractData.completed': true,
         'workflowSteps.step3_extractData.completedAt': new Date(),
@@ -1198,14 +1088,11 @@ async function extractDataFromDocuments(lohangDraftId) {
         updatedAt: new Date()
       });
       
-      console.log('Data extraction completed successfully');
-      console.log('✅ Ready for step 4 - User can now continue to calculation');
     }
 
   } catch (error) {
     console.error('Extract data error:', error);
     
-    // Lỗi nghiêm trọng (không catch được)
     await LohangDraft.findByIdAndUpdate(lohangDraftId, {
       status: 'EXTRACTION_FAILED',
       extractionErrors: [{
@@ -1218,10 +1105,7 @@ async function extractDataFromDocuments(lohangDraftId) {
   }
 }
 
-/**
- * Retry extraction khi có lỗi - Chỉ retry các bảng bị lỗi
- * Nếu có nhiều bảng bị lỗi, sẽ retry từng bảng một
- */
+
 async function retryExtraction(lohangDraftId) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
   
@@ -1237,7 +1121,6 @@ async function retryExtraction(lohangDraftId) {
     throw err;
   }
 
-  // Lấy danh sách bảng bị lỗi từ extractionErrors
   const failedTables = (lohangDraft.extractionErrors || [])
     .map(e => e.step)
     .filter(step => ['EXTRACT_PRODUCT_TABLE', 'EXTRACT_NPL_TABLE', 'EXTRACT_BOM_TABLE'].includes(step));
@@ -1248,16 +1131,13 @@ async function retryExtraction(lohangDraftId) {
     throw err;
   }
 
-  console.log(`Retrying failed tables: ${failedTables.join(', ')}`);
 
-  // Reset errors và status
   await LohangDraft.findByIdAndUpdate(lohangDraftId, {
     status: 'DATA_EXTRACTING',
     extractionErrors: [],
     updatedAt: new Date()
   });
 
-  // Trigger retry extraction async - chỉ retry các bảng bị lỗi
   setImmediate(() => {
     retryFailedTablesExtraction(lohangDraftId, failedTables)
       .catch(err => console.error('Retry extraction error:', err));
@@ -1276,10 +1156,6 @@ async function retryExtraction(lohangDraftId) {
   };
 }
 
-/**
- * Retry các bảng bị lỗi (được gọi từ retryExtraction)
- * Chỉ re-extract những bảng trong danh sách failedTables
- */
 async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
   const errors = [];
   
@@ -1303,12 +1179,8 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
       bundleId = documents[0].bundleId;
     }
 
-    console.log(`Retrying ${failedTables.length} failed tables...`);
-
-    // RETRY: EXTRACT_PRODUCT_TABLE
     if (failedTables.includes('EXTRACT_PRODUCT_TABLE')) {
       try {
-        console.log('Retrying PRODUCT table...');
         const invoiceDoc = documents.find(d => d.documentType === 'COMMERCIAL_INVOICE');
         const declarationDoc = documents.find(d => d.documentType === 'EXPORT_DECLARATION');
 
@@ -1335,7 +1207,6 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
           { upsert: true, new: true }
         );
 
-        console.log(`✅ Retried PRODUCT table: ${productTableData.products?.length || 0} products`);
       } catch (error) {
         console.error('Retry PRODUCT table error:', error);
         errors.push({
@@ -1346,10 +1217,8 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
       }
     }
 
-    // RETRY: EXTRACT_NPL_TABLE
     if (failedTables.includes('EXTRACT_NPL_TABLE')) {
       try {
-        console.log('Retrying NPL table...');
         const vatInvoiceDocs = documents.filter(d => d.documentType === 'VAT_INVOICE');
 
         if (vatInvoiceDocs.length === 0) {
@@ -1378,7 +1247,6 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
           { upsert: true, new: true }
         );
 
-        console.log(`✅ Retried NPL table: ${nplTableData.materials?.length || 0} items`);
       } catch (error) {
         console.error('Retry NPL table error:', error);
         errors.push({
@@ -1389,10 +1257,8 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
       }
     }
 
-    // RETRY: EXTRACT_BOM_TABLE
     if (failedTables.includes('EXTRACT_BOM_TABLE')) {
       try {
-        console.log('Retrying BOM table...');
         const bomDocs = documents.filter(d => d.documentType === 'BOM');
 
         if (bomDocs.length === 0) {
@@ -1427,7 +1293,6 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
           { upsert: true, new: true }
         );
 
-        console.log(`✅ Retried BOM table: ${bomTableData.totalMaterials} materials`);
       } catch (error) {
         console.error('Retry BOM table error:', error);
         errors.push({
@@ -1438,12 +1303,10 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
       }
     }
 
-    // Cập nhật status lohangDraft
     const productTable = await ExtractedProductTable.findOne({ lohangDraftId: lohangDraft._id }).lean();
     const skuCount = productTable?.products?.length || 0;
     
     if (errors.length > 0) {
-      // Vẫn có lỗi
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         totalSkuCount: skuCount,
         status: 'EXTRACTION_FAILED',
@@ -1451,9 +1314,7 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
         'workflowSteps.step3_extractData.inProgress': false,
         updatedAt: new Date()
       });
-      console.log('Retry extraction completed with errors:', errors);
     } else {
-      // Thành công - tất cả bảng đã được retry thành công
       await LohangDraft.findByIdAndUpdate(lohangDraftId, {
         totalSkuCount: skuCount,
         status: 'EXTRACTED',
@@ -1464,7 +1325,6 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
         'workflowSteps.step3_extractData.inProgress': false,
         updatedAt: new Date()
       });
-      console.log('✅ Retry extraction completed successfully');
     }
 
   } catch (error) {
@@ -1482,12 +1342,6 @@ async function retryFailedTablesExtraction(lohangDraftId, failedTables) {
   }
 }
 
-/**
- * Re-extract một bảng cụ thể với user note
- * @param {string} lohangDraftId 
- * @param {string} tableType - 'PRODUCT' | 'NPL' | 'BOM'
- * @param {string} userNote - Ghi chú của user về lỗi/yêu cầu
- */
 async function reExtractTable(lohangDraftId, tableType, userNote) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
   
@@ -1508,18 +1362,8 @@ async function reExtractTable(lohangDraftId, tableType, userNote) {
   const firstDoc = documents[0];
   const bundleId = firstDoc?.bundleId;
 
-  console.log(`Re-extracting ${tableType} table with user note: ${userNote}`);
-  console.log('Available documents:', documents.map(d => ({
-    id: d._id,
-    type: d.documentType,
-    fileName: d.fileName,
-    hasOcr: !!d.ocrResult,
-    ocrLength: d.ocrResult?.length || 0
-  })));
-
   try {
     if (tableType === 'PRODUCT') {
-      // Re-extract Product Table
       const invoiceDoc = documents.find(d => d.documentType === 'COMMERCIAL_INVOICE');
       const declarationDoc = documents.find(d => d.documentType === 'EXPORT_DECLARATION');
 
@@ -1531,10 +1375,9 @@ async function reExtractTable(lohangDraftId, tableType, userNote) {
         invoiceDoc,
         declarationDoc,
         lohangDraft.exchangeRate,
-        userNote // Truyền user note vào prompt
+        userNote 
       );
 
-      // Cập nhật DB với note
       await ExtractedProductTable.findOneAndUpdate(
         { lohangDraftId: lohangDraft._id },
         {
@@ -1557,7 +1400,6 @@ async function reExtractTable(lohangDraftId, tableType, userNote) {
       };
 
     } else if (tableType === 'NPL') {
-      // Re-extract NPL Table
       const vatInvoiceDocs = documents.filter(d => d.documentType === 'VAT_INVOICE');
 
       if (vatInvoiceDocs.length === 0) {
@@ -1566,7 +1408,6 @@ async function reExtractTable(lohangDraftId, tableType, userNote) {
 
       const nplTableData = await extractor.extractNplTable(vatInvoiceDocs, userNote);
 
-      // Thêm stt cho từng item trong materials array trước khi lưu vào DB
       if (nplTableData.materials && Array.isArray(nplTableData.materials)) {
         nplTableData.materials = nplTableData.materials.map((material, index) => ({
           stt: index + 1,
@@ -1596,7 +1437,6 @@ async function reExtractTable(lohangDraftId, tableType, userNote) {
       };
 
     } else if (tableType === 'BOM') {
-      // Re-extract BOM Table
       const bomDocs = documents.filter(d => d.documentType === 'BOM');
 
       if (bomDocs.length === 0) {
@@ -1654,9 +1494,6 @@ async function reExtractTable(lohangDraftId, tableType, userNote) {
   }
 }
 
-/**
- * Get workflow info và next action cho FE
- */
 function getWorkflowInfo(lohangDraft) {
   const { currentStep, workflowSteps, status } = lohangDraft;
   
@@ -1718,7 +1555,6 @@ function getWorkflowInfo(lohangDraft) {
     }
   ];
 
-  // Xác định next action
   let nextAction = null;
   let canProceed = true;
   let message = '';
@@ -1733,7 +1569,6 @@ function getWorkflowInfo(lohangDraft) {
     canProceed = false;
     message = 'Extraction failed. Please retry.';
   } else if (currentStep === 1) {
-    // Bước 1: Upload documents → Continue to step 2
     nextAction = {
       type: 'CONTINUE',
       endpoint: `/api/v1/co/lohang/${lohangDraft._id}/continue`,
@@ -1749,7 +1584,6 @@ function getWorkflowInfo(lohangDraft) {
       label: 'Continue',
       description: 'Setup Form & Start Extraction',
       requiredFields: ['formType', 'exchangeRate', 'criterionType'],
-      // API cũ (nếu muốn tách riêng)
       alternativeEndpoint: `/api/v1/co/lohang/${lohangDraft._id}/setup`
     };
   } else if (currentStep === 3 && !workflowSteps?.step3_extractData?.completed && !workflowSteps?.step3_extractData?.inProgress) {
@@ -1828,10 +1662,6 @@ function getWorkflowInfo(lohangDraft) {
   };
 }
 
-/**
- * BƯỚC 4: Tính toán Định mức Tiêu hao và Phân bổ FIFO
- * POST /api/v1/co/lohang/:id/calculate-consumption
- */
 async function calculateConsumptionAndFifo(lohangDraftId) {
   const lohangDraft = await LohangDraft.findById(lohangDraftId).lean();
   if (!lohangDraft) {
@@ -1840,9 +1670,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
     throw err;
   }
 
-  console.log('=== BƯỚC 4: TÍNH TOÁN TIÊU HAO VÀ FIFO ===');
-
-  // Lấy 3 bảng đã extract
   const productTable = await ExtractedProductTable.findOne({ lohangDraftId }).lean();
   const nplTable = await ExtractedNplTable.findOne({ lohangDraftId }).lean();
   const bomTable = await ExtractedBomTable.findOne({ lohangDraftId }).lean();
@@ -1855,89 +1682,53 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
   const errors = [];
   const warnings = [];
 
-  // Xóa dữ liệu cũ (nếu có)
   await NplConsumptionDetail.deleteMany({ lohangDraftId });
 
-  console.log('📊 Data loaded:', {
-    products: productTable.products?.length || 0,
-    materials: nplTable.materials?.length || 0,
-    bomData: bomTable.bomData?.length || 0,
-    bomSkus: bomTable.skuList?.length || 0,
-    bomMaterials: bomTable.totalMaterials || 0
-  });
-  
-  // Debug: Log tên NPL trong BOM
-  console.log('\n🔍 NPL names in BOM:');
-  (bomTable.bomData || []).slice(0, 5).forEach(bom => {
-    console.log(`  - "${bom.nplName}"`);
-  });
-  
-  // Debug: Log tên NPL trong VAT Invoice
-  console.log('\n🔍 NPL names in VAT Invoice:');
-  (nplTable.materials || []).slice(0, 5).forEach(npl => {
-    console.log(`  - "${npl.tenHang}" (maNl: ${npl.maNl})`);
-  });
-
-  // ========================================
-  // BƯỚC 4: TÍNH TOÁN TIÊU HAO VÀ PHÂN BỔ FIFO (GỘP 1 BẢNG)
-  // ========================================
-  console.log('\n📐 Step 4: Calculating consumption and FIFO allocation...');
-  
-  // Bước 1: Thu thập thông tin consumption cho mỗi SKU-NPL
-  const consumptionMap = new Map(); // key: nplName, value: [{skuCode, quantityNeeded, ...}]
+  const consumptionMap = new Map(); 
 
   for (const product of productTable.products || []) {
     const skuCode = product.skuCode;
     const quantitySku = product.quantity;
     const stt = product.stt;
 
-    // Bây giờ BOM skuList đã chứa Product SKU codes (5022064, 5022065...)
     const bomSku = (bomTable.skuList || []).find(s => s.skuCode === skuCode);
 
     if (!bomSku) {
       warnings.push(`SKU ${skuCode} (STT ${stt}): Không tìm thấy trong BOM skuList`);
-      console.log(`\n  ⚠️ SKU: ${skuCode} (STT ${stt}) - No BOM mapping`);
       continue;
     }
-
-    console.log(`\n  📦 SKU: ${skuCode} (SL: ${quantitySku})`);
 
     for (const bomMaterial of bomTable.bomData || []) {
       const nplName = bomMaterial.nplName;
       const normPerSkuObj = bomMaterial.normPerSku;
-      const normPerSku = normPerSkuObj?.[skuCode]; // Sử dụng Product SKU code trực tiếp
-      
+      const normPerSku = normPerSkuObj?.[skuCode]; 
       if (!normPerSku || normPerSku === 0) continue;
       
       const totalQuantityNeeded = normPerSku * quantitySku;
 
-      // Match NPL với VAT Invoice - Cải thiện logic matching
       let nplInfo = null;
       
-      // 1. Thử match trực tiếp theo mã NPL
       if (bomMaterial.nplCode) {
         nplInfo = (nplTable.materials || []).find(m => 
           m.maNl && m.maNl.trim().toLowerCase() === bomMaterial.nplCode.trim().toLowerCase()
         );
       }
       
-      // 2. Thử match theo tên hàng chính xác
       if (!nplInfo) {
         nplInfo = (nplTable.materials || []).find(m => 
           m.tenHang.trim().toLowerCase() === nplName.trim().toLowerCase()
         );
       }
 
-      // 3. Thử match theo keywords (loại bỏ ký tự Trung Quốc và từ ngắn)
       if (!nplInfo) {
         const bomKeywords = nplName
-          .replace(/\(.*?\)/g, '') // Loại bỏ nội dung trong ngoặc
-          .replace(/[\u4e00-\u9fa5]/g, '') // Loại bỏ ký tự Trung Quốc
-          .replace(/[^\w\s]/g, ' ') // Thay thế ký tự đặc biệt bằng space
+          .replace(/\(.*?\)/g, '') 
+          .replace(/[\u4e00-\u9fa5]/g, '') 
+          .replace(/[^\w\s]/g, ' ') 
           .trim()
           .toLowerCase()
           .split(/\s+/)
-          .filter(w => w.length > 2); // Chỉ lấy từ dài hơn 2 ký tự
+          .filter(w => w.length > 2); 
 
         if (bomKeywords.length > 0) {
           nplInfo = (nplTable.materials || []).find(m => {
@@ -1947,7 +1738,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
         }
       }
       
-      // 4. Thử match theo một số mapping đặc biệt
       if (!nplInfo) {
         const specialMappings = {
           'ván mdf': ['ván mdf', 'mdf'],
@@ -1976,7 +1766,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
       }
 
       if (!nplInfo) {
-        console.log(`    ⚠️ NPL "${nplName}" không tìm thấy trong VAT Invoice`);
         warnings.push(`SKU ${skuCode} - NPL "${nplName}": Không tìm thấy trong VAT Invoice`);
         continue;
       }
@@ -1997,12 +1786,9 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
         normPerSku,
         totalQuantityNeeded
       });
-
-      console.log(`    ✓ ${nplName}: ${totalQuantityNeeded.toFixed(4)} ${bomMaterial.unit || nplInfo.donViTinh}`);
     }
   }
 
-  // Bước 2: Phân bổ FIFO và tạo records
   const detailRecords = [];
   let insufficientStockErrors = [];
 
@@ -2011,10 +1797,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
     const nplName = firstConsumption.nplName;
     const totalNeeded = consumptions.reduce((sum, c) => sum + c.totalQuantityNeeded, 0);
 
-    console.log(`\n  📦 NPL: ${nplName}`);
-    console.log(`     Total needed: ${totalNeeded.toFixed(4)} ${firstConsumption.unit}`);
-
-    // Lấy tồn kho FIFO
     const stockLots = (nplTable.materials || [])
       .filter(m => m.tenHang.trim().toLowerCase() === nplKey)
       .sort((a, b) => new Date(a.ngayHd) - new Date(b.ngayHd));
@@ -2025,7 +1807,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
     }
 
     const totalStock = stockLots.reduce((sum, lot) => sum + (lot.soLuong || 0), 0);
-    console.log(`     Total stock: ${totalStock.toFixed(4)} ${firstConsumption.unit}`);
 
     if (totalStock < totalNeeded) {
       insufficientStockErrors.push(
@@ -2034,7 +1815,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
       continue;
     }
 
-    // Phân bổ FIFO
     let remainingToAllocate = totalNeeded;
     let allocationOrder = 1;
 
@@ -2044,7 +1824,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
       const availableInLot = lot.soLuong || 0;
       const allocateQty = Math.min(remainingToAllocate, availableInLot);
 
-      // Tạo detail record cho từng SKU
       for (const consumption of consumptions) {
         const ratio = consumption.totalQuantityNeeded / totalNeeded;
         const allocatedForThis = allocateQty * ratio;
@@ -2056,71 +1835,35 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
         const unitPriceUsd = unitPriceVnd / exchangeRate;
         const totalValueUsd = allocatedForThis * unitPriceUsd;
 
-        // Tính toán các giá trị theo công thức
-        const soLuong = allocatedForThis; // Số lượng phân bổ
-        const donGiaVnd = lot.donGia || 0; // Đơn giá VND
-        const thanhTienVnd = soLuong * donGiaVnd; // Thành tiền VND
-        const tyGiaVndUsd = lot.tyGiaVndUsd || exchangeRate; // Tỷ giá
-        const donGiaUsd = donGiaVnd / tyGiaVndUsd; // Đơn giá USD
-        const soLuongLamCo = soLuong; // Số lượng làm CO (thường = số lượng)
-        const dvtCo = consumption.unit; // DVT CO (cùng với đơn vị tính)
-        const triGiaCifUsd = soLuongLamCo * donGiaUsd; // Trị giá CIF USD
+        const soLuong = allocatedForThis; 
+        const donGiaVnd = lot.donGia || 0; 
+        const thanhTienVnd = soLuong * donGiaVnd; 
+        const tyGiaVndUsd = lot.tyGiaVndUsd || exchangeRate; 
+        const donGiaUsd = donGiaVnd / tyGiaVndUsd;
+        const soLuongLamCo = soLuong; 
+        const dvtCo = consumption.unit; 
+        const triGiaCifUsd = soLuongLamCo * donGiaUsd; 
 
         detailRecords.push({
           lohangDraftId,
-          
-          // Thông tin SKU (để group by)
           skuCode: consumption.skuCode,
           productName: consumption.productName,
           quantitySku: consumption.quantitySku,
-          
-          // 15 cột chính theo bảng yêu cầu:
-          // 1. MÃ NL
           maNl: consumption.nplCode || lot.maNl || '',
-          
-          // 2. SỐ HĐ
           soHd: lot.soHd || '',
-          
-          // 3. NGÀY HĐ
           ngayHd: new Date(lot.ngayHd),
-          
-          // 4. TÊN HÀNG
           tenHang: consumption.nplName,
-          
-          // 5. ĐƠN VỊ TÍNH (ĐVT)
           donViTinh: consumption.unit,
-          
-          // 6. SỐ LƯỢNG
           soLuong: soLuong,
-          
-          // 7. ĐƠN GIÁ (VND)
           donGia: donGiaVnd,
-          
-          // 8. THÀNH TIỀN (VND)
           thanhTien: thanhTienVnd,
-          
-          // 9. TỶ GIÁ VND/USD
           tyGiaVndUsd: tyGiaVndUsd,
-          
-          // 10. ĐƠN GIÁ USD
           donGiaUsd: donGiaUsd,
-          
-          // 11. SỐ LƯỢNG LÀM CO
           soLuongLamCo: soLuongLamCo,
-          
-          // 12. ĐVT (CO)
           dvt: dvtCo,
-          
-          // 13. TRỊ GIÁ CIF (USD)
           triGiaCifUsd: triGiaCifUsd,
-          
-          // 14. HS CODE
           hsCode: consumption.hsCodeNpl || lot.hsCode || '',
-          
-          // 15. XUẤT XỨ
           xuatXu: lot.xuatXu || 'MUA VN KRXX',
-          
-          // Metadata bổ sung
           normPerSku: consumption.normPerSku,
           totalQuantityNeeded: consumption.totalQuantityNeeded,
           supplierName: lot.supplierName || '',
@@ -2131,23 +1874,15 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
 
       remainingToAllocate -= allocateQty;
       allocationOrder++;
-
-      console.log(`     ✓ Allocated ${allocateQty.toFixed(4)} from invoice ${lot.soHd || ''} (${new Date(lot.ngayHd).toLocaleDateString()})`);
     }
   }
 
-  // Lưu vào DB
   if (detailRecords.length > 0) {
     await NplConsumptionDetail.insertMany(detailRecords);
-    console.log(`\n✅ Saved ${detailRecords.length} NPL consumption detail records`);
   }
 
-  // ========================================
-  // CẬP NHẬT TRẠNG THÁI LÔ HÀNG
-  // ========================================
-  
+
   if (insufficientStockErrors.length > 0) {
-    // Có lỗi thiếu tồn kho - nhưng vẫn cho phép hoàn thành với warnings
     await LohangDraft.findByIdAndUpdate(lohangDraftId, {
       status: 'CALCULATED_WITH_WARNINGS',
       currentStep: 4,
@@ -2158,7 +1893,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
       updatedAt: new Date()
     });
 
-    console.log('\n⚠️ Calculation completed with insufficient stock warnings');
     
     return {
       success: true,
@@ -2170,7 +1904,6 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
     };
   }
 
-  // ✅ Thành công
   await LohangDraft.findByIdAndUpdate(lohangDraftId, {
     status: 'CALCULATED',
     currentStep: 4,

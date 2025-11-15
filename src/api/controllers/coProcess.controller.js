@@ -2,11 +2,6 @@ const { asyncHandler } = require('../../core/middlewares/error.middleware');
 const constants = require('../../core/utils/constants');
 const coProcessHandle = require('../handles/coProcess.handle');
 
-
-/**
- * Lấy chi tiết lô hàng
- * GET /api/v1/co/lohang/:lohangDraftId
- */
 const getLohangDetail = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await coProcessHandle.getLohangDetail(lohangDraftId);
@@ -19,11 +14,6 @@ const getLohangDetail = asyncHandler(async (req, res) => {
   });
 });
 
-
-/**
- * Danh sách C/O (draft + hoàn thành)
- * GET /api/v1/co/list
- */
 const listCO = asyncHandler(async (req, res) => {
   const result = await coProcessHandle.listCO(req.userId, req.query);
   return res.status(constants.HTTP_STATUS.OK).json({
@@ -33,10 +23,6 @@ const listCO = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Tạo C/O draft từ bundle
- * POST /api/v1/co/create
- */
 const createCO = asyncHandler(async (req, res) => {
   const result = await coProcessHandle.createCOFromBundle(req.userId, req.body);
   return res.status(constants.HTTP_STATUS.CREATED).json({
@@ -47,10 +33,6 @@ const createCO = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Lấy danh sách Form và Tiêu chí được hỗ trợ
- * GET /api/v1/co/supported-combinations
- */
 const getSupportedCombinations = asyncHandler(async (req, res) => {
   const result = await coProcessHandle.getSupportedCombinations();
   return res.status(constants.HTTP_STATUS.OK).json({
@@ -61,15 +43,10 @@ const getSupportedCombinations = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Setup Form E/B và Tiêu chí
- * PUT /api/v1/co/lohang/:lohangDraftId/setup
- */
 const setupFormAndCriteria = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const { formType, criterionType } = req.body;
   
-  // Validation: Chỉ hỗ trợ FORM_E + CTH
   if (formType !== 'FORM_E' || criterionType !== 'CTH') {
     return res.status(constants.HTTP_STATUS.BAD_REQUEST).json({
       success: false,
@@ -90,10 +67,6 @@ const setupFormAndCriteria = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Trigger trích xuất và tổng hợp dữ liệu (khi nhân viên bấm "Tiếp tục")
- * POST /api/v1/co/lohang/:lohangDraftId/extract-tables
- */
 const triggerExtractTables = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await coProcessHandle.triggerExtractTables(lohangDraftId);
@@ -105,10 +78,6 @@ const triggerExtractTables = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Cập nhật document trong bundle
- * PUT /api/v1/review/documents/:bundleId/documents/:documentId
- */
 const updateDocument = asyncHandler(async (req, res) => {
   const { bundleId, documentId } = req.params;
   const result = await coProcessHandle.updateDocument(bundleId, documentId, req.body);
@@ -121,10 +90,6 @@ const updateDocument = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Xoá document khỏi bundle
- * DELETE /api/v1/review/documents/:bundleId/documents/:documentId
- */
 const deleteDocument = asyncHandler(async (req, res) => {
   const { bundleId, documentId } = req.params;
   const result = await coProcessHandle.deleteDocument(bundleId, documentId);
@@ -137,10 +102,6 @@ const deleteDocument = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Retry extraction khi có lỗi
- * POST /api/v1/co/lohang/:id/retry-extraction
- */
 const retryExtraction = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const result = await coProcessHandle.retryExtraction(id);
@@ -152,10 +113,6 @@ const retryExtraction = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Re-extract một bảng cụ thể với user note
- * POST /api/v1/co/lohang/:id/re-extract-table
- */
 const reExtractTable = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { tableType, userNote } = req.body;
@@ -181,11 +138,6 @@ const reExtractTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Continue to next step - TỔNG HỢP TẤT CẢ
- * POST /api/v1/co/lohang/:id/continue
- * Body: { formType, exchangeRate, criterionType, tables } (tùy bước)
- */
 const continueToNextStep = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const payload = req.body;
@@ -199,15 +151,10 @@ const continueToNextStep = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Setup Form + Trigger Extract cùng lúc (Tối ưu UX)
- * POST /api/v1/co/lohang/:id/setup-and-extract
- */
 const setupAndExtract = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { formType, criterionType } = req.body;
   
-  // Validation: Chỉ hỗ trợ FORM_E + CTH
   if (formType !== 'FORM_E' || criterionType !== 'CTH') {
     const err = new Error(`Combination ${formType} + ${criterionType} chưa được phát triển. Hiện tại chỉ hỗ trợ FORM_E + CTH.`);
     err.status = constants.HTTP_STATUS.BAD_REQUEST;
@@ -225,10 +172,6 @@ const setupAndExtract = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Tính toán tiêu hao và phân bổ FIFO (Bước 4)
- * POST /api/v1/co/lohang/:lohangDraftId/calculate-consumption
- */
 const calculateConsumption = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await coProcessHandle.calculateConsumptionAndFifo(lohangDraftId);
@@ -241,10 +184,6 @@ const calculateConsumption = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Danh sách C/O (draft + hoàn thành)
- * GET /api/v1/co/list
- */
 const listCOBCT = asyncHandler(async (req, res) => {
   const result = await coProcessHandle.listCOBCT(req.userId, req.query);
   return res.status(constants.HTTP_STATUS.OK).json({

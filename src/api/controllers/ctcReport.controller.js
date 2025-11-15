@@ -2,10 +2,6 @@ const { asyncHandler } = require('../../core/middlewares/error.middleware');
 const constants = require('../../core/utils/constants');
 const ctcReportHandle = require('../handles/ctcReport.handle');
 
-/**
- * Tạo bảng kê CTC cho tất cả SKU trong lô hàng
- * POST /api/v1/co/lohang/:lohangDraftId/ctc-reports
- */
 const generateCTCReports = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
 
@@ -25,10 +21,6 @@ const generateCTCReports = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Lấy danh sách bảng kê CTC đã tạo
- * GET /api/v1/co/lohang/:lohangDraftId/ctc-reports
- */
 const getCTCReports = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await ctcReportHandle.getCTCReports(lohangDraftId);
@@ -41,10 +33,6 @@ const getCTCReports = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Retry tạo bảng kê CTC (dùng khi có lỗi ở bước 4)
- * POST /api/v1/co/lohang/:lohangDraftId/ctc-reports/retry
- */
 const retryCTCReports = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
 
@@ -64,10 +52,6 @@ const retryCTCReports = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Xóa bảng kê CTC
- * DELETE /api/v1/co/lohang/:lohangDraftId/ctc-reports/:skuCode
- */
 const deleteCTCReport = asyncHandler(async (req, res) => {
   const { lohangDraftId, skuCode } = req.params;
   await ctcReportHandle.deleteCTCReport(lohangDraftId, skuCode);
@@ -79,10 +63,6 @@ const deleteCTCReport = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Xác nhận hoàn thành hồ sơ C/O
- * POST /api/v1/co/lohang/:lohangDraftId/complete
- */
 const completeCOProcess = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await ctcReportHandle.completeCOProcess(lohangDraftId);
@@ -95,10 +75,6 @@ const completeCOProcess = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Quay lại step trước để chỉnh sửa
- * POST /api/v1/co/lohang/:lohangDraftId/back-to-step/:stepNumber
- */
 const backToStep = asyncHandler(async (req, res) => {
   const { lohangDraftId, stepNumber } = req.params;
   const targetStep = parseInt(stepNumber);

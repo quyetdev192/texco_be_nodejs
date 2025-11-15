@@ -27,7 +27,6 @@ const updateProfile = asyncHandler(async (req, res) => {
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Cập nhật thông tin thành công', data: result });
 });
 
-// Admin (STAFF) user management
 const listUsers = asyncHandler(async (req, res) => {
     const result = await userHandle.listUsers(req.query || {});
     return res.status(constants.HTTP_STATUS.OK).json({ success: true, errorCode: 0, message: 'Thành công', data: result });

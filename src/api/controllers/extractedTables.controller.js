@@ -1,16 +1,7 @@
-/**
- * Controller cho Extracted Tables APIs
- * Nhân viên xem và chỉnh sửa các bảng tổng hợp dữ liệu
- */
-
 const { asyncHandler } = require('../../core/middlewares/error.middleware');
 const constants = require('../../core/utils/constants');
 const extractedTablesHandle = require('../handles/extractedTables.handle');
 
-/**
- * Lấy Bảng Tổng hợp Sản phẩm Xuất khẩu
- * GET /api/v1/co/lohang/:lohangDraftId/tables/products
- */
 const getProductTable = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await extractedTablesHandle.getProductTable(lohangDraftId);
@@ -23,10 +14,6 @@ const getProductTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Lấy Bảng Nhập kho NPL
- * GET /api/v1/co/lohang/:lohangDraftId/tables/npl
- */
 const getNplTable = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await extractedTablesHandle.getNplTable(lohangDraftId);
@@ -39,10 +26,6 @@ const getNplTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Lấy Bảng Định mức (BOM)
- * GET /api/v1/co/lohang/:lohangDraftId/tables/bom
- */
 const getBomTable = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await extractedTablesHandle.getBomTable(lohangDraftId);
@@ -55,10 +38,6 @@ const getBomTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Lấy tất cả bảng tổng hợp
- * GET /api/v1/co/lohang/:lohangDraftId/tables
- */
 const getAllTables = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await extractedTablesHandle.getAllTables(lohangDraftId);
@@ -71,10 +50,6 @@ const getAllTables = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Cập nhật 1 sản phẩm trong bảng sản phẩm
- * PUT /api/v1/co/lohang/:lohangDraftId/tables/products/:productIndex
- */
 const updateProductInTable = asyncHandler(async (req, res) => {
   const { lohangDraftId, productIndex } = req.params;
   const updatedProduct = req.body;
@@ -95,10 +70,6 @@ const updateProductInTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Cập nhật 1 NPL trong bảng NPL
- * PUT /api/v1/co/lohang/:lohangDraftId/tables/npl/:nplIndex
- */
 const updateNplInTable = asyncHandler(async (req, res) => {
   const { lohangDraftId, nplIndex } = req.params;
   const updatedNpl = req.body;
@@ -119,10 +90,6 @@ const updateNplInTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Cập nhật định mức trong bảng BOM
- * PUT /api/v1/co/lohang/:lohangDraftId/tables/bom/:bomIndex
- */
 const updateBomInTable = asyncHandler(async (req, res) => {
   const { lohangDraftId, bomIndex } = req.params;
   const updatedBom = req.body;
@@ -143,10 +110,6 @@ const updateBomInTable = asyncHandler(async (req, res) => {
   });
 });
 
-/**
- * Xác nhận tất cả bảng tổng hợp
- * PUT /api/v1/co/lohang/:lohangDraftId/tables/confirm
- */
 const confirmAllTables = asyncHandler(async (req, res) => {
   const { lohangDraftId } = req.params;
   const result = await extractedTablesHandle.confirmAllTables(lohangDraftId);
