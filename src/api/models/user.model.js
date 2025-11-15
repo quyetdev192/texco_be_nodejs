@@ -18,10 +18,10 @@ class User {
                 type: String,
                 required: true,
                 enum: [
-                    "SUPPLIER", // Nhà cung cấp
-                    "STAFF",    // Nhân viên C/O
-                    "MOIT",     // Viewer (Bộ Công Thương)
-                    "ADMIN"     // Admin
+                    "SUPPLIER",
+                    "STAFF",
+                    "MOIT",
+                    "ADMIN"
                 ]
             },
             companyId: { type: Schema.Types.ObjectId, ref: 'Company' },

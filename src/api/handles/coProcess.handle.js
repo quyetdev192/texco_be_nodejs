@@ -2196,6 +2196,55 @@ async function calculateConsumptionAndFifo(lohangDraftId) {
   };
 }
 
+
+async function listCOBCT(userId, query) {
+  const { status, invoiceNo, formType, page = 1, limit = 20 } = query;
+  
+  const filter = {};
+  if (status) filter.status = status;
+  if (invoiceNo) filter.invoiceNo = { $regex: invoiceNo, $options: 'i' };
+  if (formType) filter.formType = formType;
+
+  const skip = (page - 1) * limit;
+  
+  const [coList, total] = await Promise.all([
+    LohangDraft.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate('linkedDocuments', 'fileName documentType')
+      .lean(),
+    LohangDraft.countDocuments(filter)
+  ]);
+
+  const BundleClass = require('../models/bundle.model');
+  const Bundle = buildModelFromClass(BundleClass);
+  
+  for (const co of coList) {
+    if (co.linkedDocuments && co.linkedDocuments.length > 0) {
+      const firstDoc = await Document.findById(co.linkedDocuments[0]._id).lean();
+      if (firstDoc && firstDoc.bundleId) {
+        const bundle = await Bundle.findById(firstDoc.bundleId).lean();
+        co.bundleName = bundle?.bundleName || 'N/A';
+        co.bundleId = firstDoc.bundleId;
+      }
+    }
+    
+    co.statusText = constants.CO_STEP_VI[co.currentStep] || `Step ${co.currentStep}`;
+  }
+
+  return {
+    coList,
+    pagination: {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit)
+    }
+  };
+}
+
+
 module.exports = {
   getLohangDetail,
   listCO,
@@ -2210,5 +2259,6 @@ module.exports = {
   setupAndExtract,
   triggerExtractTables,
   calculateConsumptionAndFifo,
-  getWorkflowInfo
+  getWorkflowInfo,
+  listCOBCT
 };

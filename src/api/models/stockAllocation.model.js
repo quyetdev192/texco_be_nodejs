@@ -1,7 +1,3 @@
-/**
- * Bảng Chi tiết Phân bổ Xuất kho (Stock Allocation - FIFO)
- * Ghi lại NPL xuất từ hóa đơn nhập nào để truy xuất nguồn gốc
- */
 class StockAllocationClass {
   static collection = 'stock_allocations';
 
@@ -9,36 +5,24 @@ class StockAllocationClass {
     return {
       lohangDraftId: { type: 'ObjectId', ref: 'LohangDraft', required: true },
       consumptionId: { type: 'ObjectId', ref: 'ConsumptionCalculation', required: true },
-      
-      // SKU Info
       skuCode: { type: 'String', required: true },
       productName: { type: 'String' },
-      
-      // NPL Info
       nplCode: { type: 'String' },
       nplName: { type: 'String', required: true },
       hsCodeNpl: { type: 'String' },
       unit: { type: 'String', required: true },
-      
-      // Phân bổ từ hóa đơn nhập kho (FIFO)
-      fromInvoiceNo: { type: 'String', required: true }, // Số hóa đơn nhập
-      fromInvoiceDate: { type: 'Date', required: true }, // Ngày hóa đơn nhập
-      fromSupplier: { type: 'String' }, // Nhà cung cấp
-      
-      // Số lượng phân bổ
-      allocatedQuantity: { type: 'Number', required: true }, // SL xuất từ hóa đơn này
+      fromInvoiceNo: { type: 'String', required: true },
+      fromInvoiceDate: { type: 'Date', required: true },
+      fromSupplier: { type: 'String' },
+      allocatedQuantity: { type: 'Number', required: true },
       unitPriceVnd: { type: 'Number' },
       totalValueVnd: { type: 'Number' },
       unitPriceUsd: { type: 'Number' },
       totalValueUsd: { type: 'Number' },
-      
-      // Xuất xứ
-      originCountry: { type: 'String' }, // Xuất xứ NPL
-      hasCo: { type: 'Boolean', default: false }, // Có C/O không
-      coNumber: { type: 'String' }, // Số C/O (nếu có)
-      
-      // Thứ tự FIFO
-      allocationOrder: { type: 'Number', required: true }, // 1, 2, 3... (FIFO order)
+      originCountry: { type: 'String' },
+      hasCo: { type: 'Boolean', default: false },
+      coNumber: { type: 'String' },
+      allocationOrder: { type: 'Number', required: true },
       
       exchangeRate: { type: 'Number', default: 24500 },
       

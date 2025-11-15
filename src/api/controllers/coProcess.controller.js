@@ -241,6 +241,20 @@ const calculateConsumption = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Danh sách C/O (draft + hoàn thành)
+ * GET /api/v1/co/list
+ */
+const listCOBCT = asyncHandler(async (req, res) => {
+  const result = await coProcessHandle.listCOBCT(req.userId, req.query);
+  return res.status(constants.HTTP_STATUS.OK).json({
+    success: true,
+    errorCode: 0,
+    data: result
+  });
+});
+
+
 module.exports = {
   getLohangDetail,
   listCO,
@@ -254,5 +268,6 @@ module.exports = {
   reExtractTable,
   calculateConsumption,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+  listCOBCT
 };
